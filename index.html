@@ -1,0 +1,1658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Job Board v3 (Test)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #f0f2f5; color: #1a1a2e; }
+  #root { height: 100vh; display: flex; flex-direction: column; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useRef, useEffect, useMemo, useCallback } = React;
+
+/* ═══════════════════════════════════════════════════════════════
+   CONFIGURATION — Paste your Google Apps Script Web App URL here
+   ═══════════════════════════════════════════════════════════════ */
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbziHs839slKbF4iV7CUaCi0xteyQqBSeHpsX0UUHb8GdXCzwCocn3qqxIjHLupRFbf0OQ/exec';
+/* If left empty, the app runs in local/demo mode with sample data */
+
+/* ─── Color palette for projects ─── */
+const PROJECT_COLORS = [
+  '#2563eb','#16a34a','#ca8a04','#dc2626','#db2777','#ea580c','#9333ea','#92400e'
+];
+const COLOR_NAMES = {
+  '#2563eb':'Cooper','#16a34a':'JD','#ca8a04':'Mike','#dc2626':'Hunter',
+  '#db2777':'Kent','#ea580c':'Jacob','#9333ea':'JB','#92400e':'Tentative'
+};
+
+/* ─── Date helpers ─── */
+function getMonday(d) {
+  const date = new Date(d);
+  const day = date.getDay();
+  const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+  date.setDate(diff);
+  date.setHours(0,0,0,0);
+  return date;
+}
+
+function addDays(d, n) {
+  const r = new Date(d);
+  r.setDate(r.getDate() + n);
+  return r;
+}
+
+function fmtDate(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function parseDate(s) {
+  const [y,m,d] = s.split('-').map(Number);
+  return new Date(y, m-1, d);
+}
+
+const DAY_NAMES = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+
+// Project Managers — listed only in the Activity Tracking user picker; excluded from the Employees roster
+const PROJECT_MANAGERS = ['JD Steer','Cooper Steer','Jacob Huff','Hunter Brewer','Mike Cook','JB Boyle'];
+
+/* ─── Google Sheets API layer ─── */
+const api = {
+  isConnected() { return !!APPS_SCRIPT_URL; },
+
+  async getAll() {
+    const res = await fetch(APPS_SCRIPT_URL + '?action=getAll');
+    return res.json();
+  },
+
+  async createProject(data) {
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'createProject', data })
+    });
+    return res.json();
+  },
+
+  async updateProject(data) {
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'updateProject', data })
+    });
+    return res.json();
+  },
+
+  async deleteProject(id) {
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'deleteProject', id })
+    });
+    return res.json();
+  },
+
+  async updateEmployees(employees) {
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'updateEmployees', employees })
+    });
+    return res.json();
+  },
+
+  async updateEquipment(equipment) {
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'updateEquipment', equipment })
+    });
+    return res.json();
+  },
+
+  async importProjects(projects) {
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'importProjects', projects })
+    });
+    return res.json();
+  },
+
+  async updateProjectOrder(orderMap) {
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'updateProjectOrder', orderMap })
+    });
+    return res.json();
+  },
+
+  async logActivity(entry) {
+    try {
+      await fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'logActivity', data: entry })
+      });
+    } catch {} /* fire-and-forget — don't block the UI */
+  },
+
+  async getActivity() {
+    const res = await fetch(APPS_SCRIPT_URL + '?action=getActivity');
+    return res.json();
+  },
+
+  async updateTBDQueue(items) {
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'updateTBDQueue', items })
+    });
+    return res.json();
+  }
+};
+
+/* ─── Demo data (used when no Google Sheet is connected) ─── */
+function getDemoData() {
+  return {
+    employees: [
+      'Alberto Martinez','Alex Cruz','Alex Gonzalez','Andrew Mitchell','Arturo Gonzalez',
+      'Brad Carrrico','Braxton Waller','Cesar Gomez','Darell Williams','Didi Cruz',
+      'Dillian Carroll','Eric Pollard','Ezequiel Gonzalez','Freddy Cordova','George Lien',
+      'Jacob Williams','James Hack','Jerry Gabor','Jim Harcrow','John Oakley',
+      'Kaden Puckett','Max McLaughlin','Michael Esposito','Mike Blocker','Randy Harder',
+      'Ronald Maggard','Scott Payton','SUB - Jamie Morgan','SUB - Joe Shanks',
+      'SUB Roy Newby','TEMP.','Warren McGaughey'
+    ],
+    equipment: [
+      'Scissor Lift #1','Scissor Lift #2','Boom Lift 40ft','Boom Lift 60ft','Forklift #1','Forklift #2',
+      'Welding Rig A','Welding Rig B','Compressor 185','Compressor 375','Generator 20kW','Generator 50kW',
+      'Pipe Threader','Conduit Bender','Cable Puller','Trencher','Mini Excavator','Skid Steer',
+      'Vacuum Truck','Crane 15-Ton','Man Basket','Laser Level Kit','Fusion Machine','Hydraulic Press'
+    ],
+    projects: [
+      { id:1, name:'CSI/IN', color:'#2563eb', startDate:'2026-03-02', endDate:'2026-03-15', employees:['Scott Payton','Didi Cruz','Dillian Carroll','Ronald Maggard','Braxton Waller','Warren McGaughey','George Lien','Ronald Maggard'], equipment:['Scissor Lift #1','Boom Lift 40ft','Welding Rig A','Compressor 185'] },
+      { id:2, name:'BG/NJ', color:'#dc2626', startDate:'2026-03-02', endDate:'2026-03-08', employees:['Jim Harcrow','Max McLaughlin','Jerry Gabor'], equipment:['Forklift #1','Generator 20kW'] },
+      { id:3, name:'CRG', color:'#16a34a', startDate:'2026-03-02', endDate:'2026-03-15', employees:['Andrew Mitchell','Alex Cruz'], equipment:['Conduit Bender','Cable Puller'] },
+      { id:4, name:'Sabert VA', color:'#9333ea', startDate:'2026-03-02', endDate:'2026-03-08', employees:['SUB - Joe Shanks','Brad Carrrico','Alex Cruz','Mike Blocker'], equipment:['Boom Lift 60ft','Welding Rig B','Forklift #2'] },
+      { id:5, name:'CSI/KY', color:'#ea580c', startDate:'2026-03-03', endDate:'2026-03-04', employees:['Michael Esposito','SUB - Jamie Morgan','Braxton Waller','John Oakley'], equipment:['Scissor Lift #2','Pipe Threader'] },
+      { id:6, name:'Bastian/IN', color:'#0891b2', startDate:'2026-03-04', endDate:'2026-03-06', employees:['Andrew Mitchell','Alberto Martinez','Alex Cruz'], equipment:['Forklift #1','Laser Level Kit'] },
+      { id:7, name:'BG/TX', color:'#be185d', startDate:'2026-03-09', endDate:'2026-03-15', employees:['Jim Harcrow','Jerry Gabor'], equipment:['Boom Lift 40ft','Compressor 375','Generator 50kW'] },
+      { id:8, name:'Fori/KY', color:'#65a30d', startDate:'2026-03-09', endDate:'2026-03-15', employees:['Eric Pollard','Ezequiel Gonzalez','Alex Gonzalez','Brad Carrrico','Darell Williams','Freddy Cordova','Alberto Martinez'], equipment:['Scissor Lift #1','Scissor Lift #2','Welding Rig A','Welding Rig B','Fusion Machine'] },
+      { id:9, name:'WHSE', color:'#7c3aed', startDate:'2026-03-09', endDate:'2026-03-10', employees:['Brad Carrrico','Darell Williams','Freddy Cordova','Randy Harder'], equipment:['Forklift #1','Forklift #2'] },
+      { id:10, name:'St. Vincent', color:'#c2410c', startDate:'2026-03-09', endDate:'2026-03-09', employees:['Andrew Mitchell','Alex Cruz'], equipment:['Trencher','Mini Excavator'] },
+      { id:11, name:'Flex', color:'#0d9488', startDate:'2026-03-10', endDate:'2026-03-13', employees:['Randy Harder','SUB - Joe Shanks','Jacob Williams'], equipment:['Crane 15-Ton','Man Basket','Hydraulic Press'] },
+      { id:12, name:'BG/MA', color:'#b91c1c', startDate:'2026-03-19', endDate:'2026-03-22', employees:['Brad Carrrico','Scott Payton'], equipment:['Boom Lift 60ft','Compressor 185'] },
+      { id:13, name:'Kingsbury/NC', color:'#4f46e5', startDate:'2026-03-16', endDate:'2026-03-16', employees:['SUB - Joe Shanks'], equipment:['Conduit Bender'] },
+    ],
+    nextId: 14
+  };
+}
+
+/* ─── Modal Component ─── */
+function Modal({ open, onClose, title, children, width }) {
+  if (!open) return null;
+  return React.createElement('div', {
+    style: { position:'fixed',inset:0,zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.5)',backdropFilter:'blur(2px)' },
+    onClick: (e) => { if (e.target === e.currentTarget) onClose(); }
+  },
+    React.createElement('div', {
+      style: { background:'#fff',borderRadius:12,boxShadow:'0 25px 50px rgba(0,0,0,0.25)',width: width || 480, maxWidth:'95vw',maxHeight:'90vh',overflow:'auto',animation:'slideUp 0.2s ease-out' }
+    },
+      React.createElement('div', {
+        style: { display:'flex',justifyContent:'space-between',alignItems:'center',padding:'16px 20px',borderBottom:'1px solid #e5e7eb' }
+      },
+        React.createElement('h2', { style: { fontSize:18,fontWeight:700 }}, title),
+        React.createElement('button', {
+          onClick: onClose,
+          style: { background:'none',border:'none',fontSize:22,cursor:'pointer',color:'#6b7280',width:32,height:32,borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center' },
+          onMouseOver: (e) => e.target.style.background = '#f3f4f6',
+          onMouseOut: (e) => e.target.style.background = 'none'
+        }, '\u2715')
+      ),
+      React.createElement('div', { style: { padding:'20px' }}, children)
+    )
+  );
+}
+
+/* ─── Chip for employee names ─── */
+function EmployeeChip({ name, removable, onRemove, color }) {
+  return React.createElement('span', {
+    style: { display:'inline-flex',alignItems:'center',gap:4,padding:'2px 8px',borderRadius:4,fontSize:12,fontWeight:500,background: color ? color+'18' : '#e5e7eb',color: color || '#374151',whiteSpace:'nowrap',lineHeight:1.4 }
+  },
+    name,
+    removable && React.createElement('span', {
+      onClick: (e) => { e.stopPropagation(); onRemove(); },
+      style: { cursor:'pointer',marginLeft:2,fontWeight:700,fontSize:14,lineHeight:1,color:'#9ca3af',display:'inline-flex' },
+      onMouseOver: (e) => e.target.style.color = '#ef4444',
+      onMouseOut: (e) => e.target.style.color = '#9ca3af'
+    }, '\u00d7')
+  );
+}
+
+/* ─── Saving indicator ─── */
+function SyncBadge({ status }) {
+  const styles = {
+    saved: { bg:'#dcfce7', color:'#16a34a', text:'Saved to Google Sheets' },
+    saving: { bg:'#fef9c3', color:'#ca8a04', text:'Saving...' },
+    error: { bg:'#fee2e2', color:'#dc2626', text:'Save failed — retrying' },
+    offline: { bg:'#f3f4f6', color:'#6b7280', text:'Local mode (no Google Sheet)' }
+  };
+  const s = styles[status] || styles.offline;
+  return React.createElement('div', {
+    style: { display:'flex',alignItems:'center',gap:6,padding:'4px 10px',borderRadius:6,background:s.bg,fontSize:11,fontWeight:600,color:s.color,whiteSpace:'nowrap' }
+  },
+    React.createElement('div', { style: { width:6,height:6,borderRadius:3,background:s.color,animation: status==='saving' ? 'pulse 1s infinite' : 'none' }}),
+    s.text
+  );
+}
+
+/* ─── CSV Import Modal ─── */
+function CSVImportModal({ open, onClose, onImport }) {
+  const [preview, setPreview] = useState(null);
+  const [mapping, setMapping] = useState({});
+  const fileRef = useRef();
+
+  function parseCSV(text) {
+    const lines = text.trim().split('\n').map(l => l.split(',').map(c => c.trim().replace(/^"|"$/g,'')));
+    if (lines.length < 2) return null;
+    return { headers: lines[0], rows: lines.slice(1) };
+  }
+
+  function handleFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const parsed = parseCSV(ev.target.result);
+      setPreview(parsed);
+      if (parsed) {
+        const auto = {};
+        parsed.headers.forEach((h, i) => {
+          const lh = h.toLowerCase();
+          if (lh.includes('name') || lh.includes('project') || lh.includes('deal') || lh.includes('title')) auto.name = i;
+          if (lh.includes('start') || lh.includes('begin')) auto.startDate = i;
+          if (lh.includes('end') || lh.includes('close') || lh.includes('finish')) auto.endDate = i;
+          if (lh.includes('employee') || lh.includes('assign') || lh.includes('team') || lh.includes('crew') || lh.includes('owner')) auto.employees = i;
+        });
+        setMapping(auto);
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function handleImport() {
+    if (!preview || mapping.name === undefined) return;
+    const projects = preview.rows.filter(r => r[mapping.name]).map(row => {
+      const name = row[mapping.name] || 'Untitled';
+      let startDate = mapping.startDate !== undefined ? row[mapping.startDate] : '';
+      let endDate = mapping.endDate !== undefined ? row[mapping.endDate] : '';
+      if (startDate) { const d = new Date(startDate); if (!isNaN(d)) startDate = fmtDate(d); else startDate = ''; }
+      if (endDate) { const d = new Date(endDate); if (!isNaN(d)) endDate = fmtDate(d); else endDate = ''; }
+      if (!startDate) startDate = fmtDate(new Date());
+      if (!endDate) endDate = startDate;
+      let employees = [];
+      if (mapping.employees !== undefined && row[mapping.employees]) {
+        employees = row[mapping.employees].split(/[;|\/]/).map(s => s.trim()).filter(Boolean);
+      }
+      return { name, startDate, endDate, employees, equipment: [] };
+    });
+    onImport(projects);
+    setPreview(null); setMapping({});
+    onClose();
+  }
+
+  const selStyle = { padding:'6px 10px',borderRadius:6,border:'1px solid #d1d5db',fontSize:13,background:'#fff',minWidth:120 };
+
+  return React.createElement(Modal, { open, onClose, title:'Import Projects from CSV', width:600 },
+    React.createElement('div', { style:{ display:'flex',flexDirection:'column',gap:16 }},
+      React.createElement('p', { style:{ fontSize:13,color:'#6b7280' }}, 'Upload a CSV exported from HubSpot or any source. Map columns to project fields.'),
+      React.createElement('input', { type:'file', accept:'.csv', ref:fileRef, onChange:handleFile, style:{ fontSize:13 }}),
+      preview && React.createElement('div', { style:{ display:'flex',flexDirection:'column',gap:12 }},
+        React.createElement('div', { style:{ background:'#f9fafb',padding:12,borderRadius:8,border:'1px solid #e5e7eb' }},
+          React.createElement('div', { style:{ fontWeight:600,fontSize:13,marginBottom:8 }}, 'Column Mapping'),
+          React.createElement('div', { style:{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:8 }},
+            ...['Project Name *','Start Date','End Date','Employees'].flatMap((label, idx) => {
+              const keys = ['name','startDate','endDate','employees'];
+              const key = keys[idx];
+              return [
+                React.createElement('label', { key:label, style:{ fontSize:12,color:'#374151' }}, label),
+                React.createElement('select', { key:key, value:mapping[key] ?? '', onChange:e => setMapping({...mapping, [key]: e.target.value === '' ? undefined : +e.target.value}), style:selStyle },
+                  React.createElement('option', { value:'' }, '\u2014 Select \u2014'),
+                  preview.headers.map((h,i) => React.createElement('option', { key:i, value:i }, h))
+                )
+              ];
+            })
+          )
+        ),
+        React.createElement('div', { style:{ background:'#f9fafb',padding:12,borderRadius:8,border:'1px solid #e5e7eb',maxHeight:150,overflow:'auto' }},
+          React.createElement('div', { style:{ fontWeight:600,fontSize:13,marginBottom:4 }}, `Preview (${preview.rows.length} rows)`),
+          React.createElement('table', { style:{ fontSize:11,width:'100%',borderCollapse:'collapse' }},
+            React.createElement('thead', {},
+              React.createElement('tr', {}, preview.headers.map((h,i) => React.createElement('th', { key:i, style:{ textAlign:'left',padding:'2px 6px',borderBottom:'1px solid #e5e7eb',background: Object.values(mapping).includes(i) ? '#dbeafe' : 'transparent' }}, h)))
+            ),
+            React.createElement('tbody', {},
+              preview.rows.slice(0,5).map((row,ri) => React.createElement('tr', { key:ri },
+                row.map((cell,ci) => React.createElement('td', { key:ci, style:{ padding:'2px 6px',borderBottom:'1px solid #f3f4f6',maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}, cell))
+              ))
+            )
+          )
+        ),
+        React.createElement('button', {
+          onClick: handleImport, disabled: mapping.name === undefined,
+          style:{ padding:'10px 20px',borderRadius:8,border:'none',fontWeight:600,fontSize:14,cursor: mapping.name !== undefined ? 'pointer' : 'not-allowed',background: mapping.name !== undefined ? '#2563eb' : '#d1d5db',color:'#fff',alignSelf:'flex-end' }
+        }, `Import ${preview.rows.length} Projects`)
+      )
+    )
+  );
+}
+
+/* ─── Project Form Modal ─── */
+function ProjectFormModal({ open, onClose, onSave, onDelete, onSplit, project, allEmployees, allEquipment, usedColors }) {
+  const isEdit = !!project;
+  const [name, setName] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [color, setColor] = useState(PROJECT_COLORS[0]);
+  const [emps, setEmps] = useState([]);
+  const [newEmp, setNewEmp] = useState('');
+  const [showDrop, setShowDrop] = useState(false);
+  const [equips, setEquips] = useState([]);
+  const [newEquip, setNewEquip] = useState('');
+  const [showEquipDrop, setShowEquipDrop] = useState(false);
+  const [splitMode, setSplitMode] = useState(false);
+  const [splitDate, setSplitDate] = useState('');
+
+  /* Can split if project spans more than 1 day */
+  const canSplit = isEdit && startDate && endDate && startDate < endDate;
+  /* Min split date = day after start, max = end date */
+  const splitMin = startDate ? fmtDate(addDays(new Date(startDate+'T00:00:00'), 1)) : '';
+  const splitMax = endDate || '';
+
+  useEffect(() => {
+    if (open) {
+      if (project) { setName(project.name); setStartDate(project.startDate); setEndDate(project.endDate); setColor(project.color); setEmps([...project.employees]); setEquips([...(project.equipment||[])]); }
+      else { setName(''); setStartDate(fmtDate(new Date())); setEndDate(fmtDate(new Date())); setColor(PROJECT_COLORS.find(c => !usedColors.includes(c)) || PROJECT_COLORS[0]); setEmps([]); setEquips([]); }
+      setNewEmp(''); setNewEquip(''); setSplitMode(false); setSplitDate('');
+    }
+  }, [open, project]);
+
+  const available = allEmployees.filter(e => !emps.includes(e) && e.toLowerCase().includes(newEmp.toLowerCase()));
+  const availableEquip = allEquipment.filter(e => !equips.includes(e) && e.toLowerCase().includes(newEquip.toLowerCase()));
+  function addEmp(n) { setEmps(prev => prev.includes(n) ? prev : [...prev, n]); setNewEmp(''); setShowDrop(false); }
+  function addEquip(n) { setEquips(prev => prev.includes(n) ? prev : [...prev, n]); setNewEquip(''); setShowEquipDrop(false); }
+  function handleSave() { if (!name.trim()||!startDate||!endDate) return; onSave({ name:name.trim(), startDate, endDate, color, employees:emps, equipment:equips, id:project?.id }); onClose(); }
+
+  const inp = { padding:'8px 12px',borderRadius:8,border:'1px solid #d1d5db',fontSize:14,width:'100%',outline:'none' };
+
+  return React.createElement(Modal, { open, onClose, title: isEdit ? 'Edit Project' : 'New Project', width:500 },
+    React.createElement('div', { style:{ display:'flex',flexDirection:'column',gap:14 }},
+      React.createElement('div', {},
+        React.createElement('label', { style:{ fontSize:12,fontWeight:600,color:'#374151',marginBottom:4,display:'block' }}, 'Project Name'),
+        React.createElement('input', { value:name, onChange:e=>setName(e.target.value), placeholder:'e.g. CSI/IN', style:inp })
+      ),
+      React.createElement('div', { style:{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:12 }},
+        React.createElement('div', {},
+          React.createElement('label', { style:{ fontSize:12,fontWeight:600,color:'#374151',marginBottom:4,display:'block' }}, 'Start Date'),
+          React.createElement('input', { type:'date', value:startDate, onChange:e=>{ setStartDate(e.target.value); if(e.target.value>endDate) setEndDate(e.target.value); }, style:inp })
+        ),
+        React.createElement('div', {},
+          React.createElement('label', { style:{ fontSize:12,fontWeight:600,color:'#374151',marginBottom:4,display:'block' }}, 'End Date'),
+          React.createElement('input', { type:'date', value:endDate, onChange:e=>setEndDate(e.target.value), min:startDate, style:inp })
+        )
+      ),
+      React.createElement('div', {},
+        React.createElement('label', { style:{ fontSize:12,fontWeight:600,color:'#374151',marginBottom:6,display:'block' }}, 'Color'),
+        React.createElement('div', { style:{ display:'flex',gap:8,flexWrap:'wrap' }},
+          PROJECT_COLORS.map(c => React.createElement('div', { key:c, onClick:()=>setColor(c), style:{ display:'flex',flexDirection:'column',alignItems:'center',gap:2,cursor:'pointer' }},
+            React.createElement('div', { style:{ width:28,height:28,borderRadius:6,background:c,border: color===c ? '3px solid #1e293b' : '3px solid transparent' }}),
+            React.createElement('span', { style:{ fontSize:9,fontWeight:600,color: color===c ? '#1e293b' : '#6b7280',lineHeight:1,whiteSpace:'nowrap' }}, COLOR_NAMES[c] || '')
+          ))
+        )
+      ),
+      React.createElement('div', {},
+        React.createElement('label', { style:{ fontSize:12,fontWeight:600,color:'#374151',marginBottom:6,display:'block' }}, 'Assigned Employees'),
+        emps.length > 0 && React.createElement('div', { style:{ display:'flex',flexWrap:'wrap',gap:4,marginBottom:8 }},
+          emps.map(e => React.createElement(EmployeeChip, { key:e, name:e, removable:true, onRemove:()=>setEmps(emps.filter(x=>x!==e)), color }))
+        ),
+        React.createElement('div', { style:{ position:'relative' }},
+          React.createElement('input', {
+            value:newEmp, onChange:e=>{ setNewEmp(e.target.value); setShowDrop(true); }, onFocus:()=>setShowDrop(true), onBlur:()=>setShowDrop(false),
+            onKeyDown:e=>{ if(e.key==='Enter' && newEmp.trim()){ addEmp(newEmp.trim()); e.preventDefault(); }},
+            placeholder:'Type to search or add...', style:inp
+          }),
+          showDrop && available.length > 0 && React.createElement('div', {
+            style:{ position:'absolute',top:'100%',left:0,right:0,zIndex:10,background:'#fff',border:'1px solid #e5e7eb',borderRadius:8,maxHeight:160,overflow:'auto',marginTop:4,boxShadow:'0 4px 12px rgba(0,0,0,0.1)' }
+          },
+            available.slice(0,10).map(e => React.createElement('div', {
+              key:e, onMouseDown:ev=>{ ev.preventDefault(); addEmp(e); },
+              style:{ padding:'8px 12px',cursor:'pointer',fontSize:13,borderBottom:'1px solid #f3f4f6' },
+              onMouseOver:ev=>ev.target.style.background='#f3f4f6', onMouseOut:ev=>ev.target.style.background='#fff'
+            }, e))
+          )
+        )
+      ),
+      React.createElement('div', {},
+        React.createElement('label', { style:{ fontSize:12,fontWeight:600,color:'#ea580c',marginBottom:6,display:'block' }}, 'Assigned Equipment'),
+        equips.length > 0 && React.createElement('div', { style:{ display:'flex',flexWrap:'wrap',gap:4,marginBottom:8 }},
+          equips.map(e => React.createElement(EmployeeChip, { key:e, name:e, removable:true, onRemove:()=>setEquips(equips.filter(x=>x!==e)), color:'#ea580c' }))
+        ),
+        React.createElement('div', { style:{ position:'relative' }},
+          React.createElement('input', {
+            value:newEquip, onChange:e=>{ setNewEquip(e.target.value); setShowEquipDrop(true); }, onFocus:()=>setShowEquipDrop(true), onBlur:()=>setShowEquipDrop(false),
+            onKeyDown:e=>{ if(e.key==='Enter' && newEquip.trim()){ addEquip(newEquip.trim()); e.preventDefault(); }},
+            placeholder:'Type to search or add equipment...', style:inp
+          }),
+          showEquipDrop && availableEquip.length > 0 && React.createElement('div', {
+            style:{ position:'absolute',top:'100%',left:0,right:0,zIndex:10,background:'#fff',border:'1px solid #e5e7eb',borderRadius:8,maxHeight:160,overflow:'auto',marginTop:4,boxShadow:'0 4px 12px rgba(0,0,0,0.1)' }
+          },
+            availableEquip.slice(0,10).map(e => React.createElement('div', {
+              key:e, onMouseDown:ev=>{ ev.preventDefault(); addEquip(e); },
+              style:{ padding:'8px 12px',cursor:'pointer',fontSize:13,borderBottom:'1px solid #f3f4f6' },
+              onMouseOver:ev=>ev.target.style.background='#f3f4f6', onMouseOut:ev=>ev.target.style.background='#fff'
+            }, e))
+          )
+        )
+      ),
+      /* ── Split Job Section ── */
+      canSplit && React.createElement('div', { style:{ borderTop:'1px solid #e5e7eb',paddingTop:12 }},
+        !splitMode
+          ? React.createElement('button', {
+              onClick:()=>{ setSplitMode(true); setSplitDate(splitMin); },
+              style:{ display:'flex',alignItems:'center',gap:6,padding:'8px 14px',borderRadius:8,border:'1px solid #d1d5db',background:'#fff',color:'#374151',fontWeight:600,fontSize:13,cursor:'pointer',width:'100%',justifyContent:'center' },
+              onMouseOver:e=>e.currentTarget.style.background='#f9fafb', onMouseOut:e=>e.currentTarget.style.background='#fff'
+            },
+              React.createElement('span', { style:{ fontSize:16 }}, '✂️'),
+              'Split Job at a Date'
+            )
+          : React.createElement('div', { style:{ background:'#fffbeb',border:'1px solid #fde68a',borderRadius:8,padding:12 }},
+              React.createElement('div', { style:{ display:'flex',alignItems:'center',gap:6,marginBottom:8 }},
+                React.createElement('span', { style:{ fontSize:14 }}, '✂️'),
+                React.createElement('span', { style:{ fontSize:13,fontWeight:700,color:'#92400e' }}, 'Split Job'),
+                React.createElement('span', { style:{ fontSize:12,color:'#b45309' }}, '— choose the date where Part 2 begins')
+              ),
+              React.createElement('div', { style:{ display:'flex',alignItems:'center',gap:8,marginBottom:10 }},
+                React.createElement('div', { style:{ flex:1 }},
+                  React.createElement('label', { style:{ fontSize:11,fontWeight:600,color:'#92400e',display:'block',marginBottom:3 }}, 'Split Date (start of Part 2)'),
+                  React.createElement('input', { type:'date', value:splitDate, onChange:e=>setSplitDate(e.target.value), min:splitMin, max:splitMax, style:{ padding:'8px 12px',borderRadius:8,border:'1px solid #fde68a',fontSize:14,width:'100%',outline:'none',background:'#fff' }})
+                )
+              ),
+              splitDate && React.createElement('div', { style:{ fontSize:12,color:'#78350f',marginBottom:10,lineHeight:1.5,background:'#fef3c7',padding:'8px 10px',borderRadius:6 }},
+                React.createElement('div', {}, React.createElement('strong', {}, 'Part 1: '), `${startDate} to ${fmtDate(addDays(new Date(splitDate+'T00:00:00'), -1))} — same crew`),
+                React.createElement('div', {}, React.createElement('strong', {}, 'Part 2: '), `${splitDate} to ${endDate} — edit crew after split`)
+              ),
+              React.createElement('div', { style:{ display:'flex',gap:8,justifyContent:'flex-end' }},
+                React.createElement('button', {
+                  onClick:()=>{ setSplitMode(false); setSplitDate(''); },
+                  style:{ padding:'7px 14px',borderRadius:6,border:'1px solid #d1d5db',background:'#fff',color:'#374151',fontWeight:600,fontSize:12,cursor:'pointer' }
+                }, 'Cancel'),
+                React.createElement('button', {
+                  onClick:()=>{ if(splitDate>=splitMin && splitDate<=splitMax) { onSplit(project, splitDate); onClose(); }},
+                  disabled:!splitDate || splitDate<splitMin || splitDate>splitMax,
+                  style:{ padding:'7px 14px',borderRadius:6,border:'none',background: splitDate&&splitDate>=splitMin&&splitDate<=splitMax ? '#d97706':'#d1d5db',color:'#fff',fontWeight:600,fontSize:12,cursor: splitDate&&splitDate>=splitMin&&splitDate<=splitMax ? 'pointer':'not-allowed' }
+                }, '✂️ Confirm Split')
+              )
+            )
+      ),
+      React.createElement('div', { style:{ display:'flex',justifyContent: isEdit ? 'space-between' : 'flex-end',gap:8,marginTop:8 }},
+        isEdit && React.createElement('button', {
+          onClick:()=>{ onDelete(project.id); onClose(); },
+          style:{ padding:'10px 20px',borderRadius:8,border:'1px solid #fca5a5',background:'#fff',color:'#dc2626',fontWeight:600,fontSize:14,cursor:'pointer' },
+          onMouseOver:e=>e.target.style.background='#fef2f2', onMouseOut:e=>e.target.style.background='#fff'
+        }, 'Delete Project'),
+        React.createElement('div', { style:{ display:'flex',gap:8 }},
+          React.createElement('button', { onClick:onClose, style:{ padding:'10px 20px',borderRadius:8,border:'1px solid #d1d5db',background:'#fff',color:'#374151',fontWeight:600,fontSize:14,cursor:'pointer' }}, 'Cancel'),
+          React.createElement('button', {
+            onClick:handleSave, disabled:!name.trim()||!startDate||!endDate,
+            style:{ padding:'10px 20px',borderRadius:8,border:'none',background: name.trim()&&startDate&&endDate ? '#2563eb':'#d1d5db',color:'#fff',fontWeight:600,fontSize:14,cursor: name.trim()&&startDate&&endDate ? 'pointer':'not-allowed' }
+          }, isEdit ? 'Save Changes' : 'Create Project')
+        )
+      )
+    )
+  );
+}
+
+/* ─── Manage Employees Modal ─── */
+function ManageEmployeesModal({ open, onClose, employees, onUpdate }) {
+  const [emps, setEmps] = useState([]);
+  const [newName, setNewName] = useState('');
+  useEffect(() => { if (open) setEmps([...employees]); }, [open, employees]);
+  function addEmp() { const n=newName.trim(); if(n&&!emps.includes(n)){ setEmps([...emps,n]); setNewName(''); }}
+  const inp = { padding:'8px 12px',borderRadius:8,border:'1px solid #d1d5db',fontSize:14,outline:'none',flex:1 };
+
+  return React.createElement(Modal, { open, onClose, title:'Manage Employee Roster', width:420 },
+    React.createElement('div', { style:{ display:'flex',flexDirection:'column',gap:12 }},
+      React.createElement('div', { style:{ display:'flex',gap:8 }},
+        React.createElement('input', { value:newName, onChange:e=>setNewName(e.target.value), onKeyDown:e=>{ if(e.key==='Enter') addEmp(); }, placeholder:'New employee name...', style:inp }),
+        React.createElement('button', { onClick:addEmp, style:{ padding:'8px 16px',borderRadius:8,border:'none',background:'#2563eb',color:'#fff',fontWeight:600,fontSize:13,cursor:'pointer' }}, 'Add')
+      ),
+      React.createElement('div', { style:{ display:'flex',flexWrap:'wrap',gap:6,maxHeight:300,overflow:'auto',padding:12,background:'#f9fafb',borderRadius:8,border:'1px solid #e5e7eb' }},
+        emps.sort((a,b)=>a.localeCompare(b)).map(e => React.createElement(EmployeeChip, { key:e, name:e, removable:true, onRemove:()=>setEmps(emps.filter(x=>x!==e)) }))
+      ),
+      React.createElement('div', { style:{ display:'flex',justifyContent:'flex-end',gap:8,marginTop:4 }},
+        React.createElement('button', { onClick:onClose, style:{ padding:'10px 20px',borderRadius:8,border:'1px solid #d1d5db',background:'#fff',color:'#374151',fontWeight:600,fontSize:14,cursor:'pointer' }}, 'Cancel'),
+        React.createElement('button', { onClick:()=>{ onUpdate(emps); onClose(); }, style:{ padding:'10px 20px',borderRadius:8,border:'none',background:'#2563eb',color:'#fff',fontWeight:600,fontSize:14,cursor:'pointer' }}, 'Save Roster')
+      )
+    )
+  );
+}
+
+/* ─── Manage Equipment Modal ─── */
+function ManageEquipmentModal({ open, onClose, equipment, onUpdate }) {
+  const [equips, setEquips] = useState([]);
+  const [newName, setNewName] = useState('');
+  useEffect(() => { if (open) setEquips([...equipment]); }, [open, equipment]);
+  function addEquip() { const n=newName.trim(); if(n&&!equips.includes(n)){ setEquips([...equips,n]); setNewName(''); }}
+  const inp = { padding:'8px 12px',borderRadius:8,border:'1px solid #d1d5db',fontSize:14,outline:'none',flex:1 };
+
+  return React.createElement(Modal, { open, onClose, title:'Manage Equipment Roster', width:420 },
+    React.createElement('div', { style:{ display:'flex',flexDirection:'column',gap:12 }},
+      React.createElement('div', { style:{ display:'flex',gap:8 }},
+        React.createElement('input', { value:newName, onChange:e=>setNewName(e.target.value), onKeyDown:e=>{ if(e.key==='Enter') addEquip(); }, placeholder:'New equipment name...', style:inp }),
+        React.createElement('button', { onClick:addEquip, style:{ padding:'8px 16px',borderRadius:8,border:'none',background:'#ea580c',color:'#fff',fontWeight:600,fontSize:13,cursor:'pointer' }}, 'Add')
+      ),
+      React.createElement('div', { style:{ display:'flex',flexWrap:'wrap',gap:6,maxHeight:300,overflow:'auto',padding:12,background:'#f9fafb',borderRadius:8,border:'1px solid #e5e7eb' }},
+        equips.sort((a,b)=>a.localeCompare(b)).map(e => React.createElement(EmployeeChip, { key:e, name:e, removable:true, onRemove:()=>setEquips(equips.filter(x=>x!==e)), color:'#ea580c' }))
+      ),
+      React.createElement('div', { style:{ display:'flex',justifyContent:'flex-end',gap:8,marginTop:4 }},
+        React.createElement('button', { onClick:onClose, style:{ padding:'10px 20px',borderRadius:8,border:'1px solid #d1d5db',background:'#fff',color:'#374151',fontWeight:600,fontSize:14,cursor:'pointer' }}, 'Cancel'),
+        React.createElement('button', { onClick:()=>{ onUpdate(equips); onClose(); }, style:{ padding:'10px 20px',borderRadius:8,border:'none',background:'#ea580c',color:'#fff',fontWeight:600,fontSize:14,cursor:'pointer' }}, 'Save Roster')
+      )
+    )
+  );
+}
+
+/* ─── Quick Edit Popup (works for both employees and equipment) ─── */
+function QuickEditPopup({ project, position, allItems, field, onUpdate, onClose }) {
+  const [search, setSearch] = useState('');
+  const ref = useRef();
+  useEffect(() => { function h(e){ if(ref.current && !ref.current.contains(e.target)) onClose(); } document.addEventListener('mousedown',h); return ()=>document.removeEventListener('mousedown',h); }, [onClose]);
+
+  const items = project[field] || [];
+  const available = allItems.filter(e => !items.includes(e) && e.toLowerCase().includes(search.toLowerCase()));
+  const isEquip = field === 'equipment';
+  const accentColor = isEquip ? '#ea580c' : '#2563eb';
+  const bgActive = isEquip ? '#fff7ed' : '#eff6ff';
+  const bgHover = isEquip ? '#fed7aa' : '#dbeafe';
+  function toggle(item) {
+    if (items.includes(item)) onUpdate({ ...project, [field]: items.filter(e=>e!==item) });
+    else onUpdate({ ...project, [field]: [...items, item] });
+  }
+
+  return React.createElement('div', {
+    ref, style:{ position:'fixed', left:Math.min(position.x, window.innerWidth-260), top:Math.min(position.y, window.innerHeight-350), zIndex:1001, width:240, background:'#fff', borderRadius:10, boxShadow:'0 10px 40px rgba(0,0,0,0.2)', border:'1px solid #e5e7eb', overflow:'hidden' }
+  },
+    React.createElement('div', { style:{ padding:'10px 12px',borderBottom:'1px solid #e5e7eb',background:'#f9fafb' }},
+      React.createElement('div', { style:{ fontSize:13,fontWeight:700,color:project.color,marginBottom:4 }}, project.name + (isEquip ? ' (Equipment)' : '')),
+      React.createElement('input', { value:search, onChange:e=>setSearch(e.target.value), placeholder:isEquip?'Search equipment...':'Search employees...', autoFocus:true, style:{ width:'100%',padding:'6px 8px',borderRadius:6,border:'1px solid #d1d5db',fontSize:12,outline:'none' }})
+    ),
+    React.createElement('div', { style:{ maxHeight:250,overflow:'auto' }},
+      items.length > 0 && React.createElement('div', { style:{ padding:'4px 0' }},
+        items.filter(e=>e.toLowerCase().includes(search.toLowerCase())).map(item =>
+          React.createElement('div', { key:item, onClick:()=>toggle(item), style:{ display:'flex',alignItems:'center',gap:8,padding:'6px 12px',cursor:'pointer',fontSize:12,background:bgActive }, onMouseOver:e=>e.currentTarget.style.background=bgHover, onMouseOut:e=>e.currentTarget.style.background=bgActive },
+            React.createElement('span', { style:{ color:accentColor,fontWeight:700,width:16 }}, '\u2713'),
+            React.createElement('span', { style:{ fontWeight:500 }}, item)
+          )
+        )
+      ),
+      available.length > 0 && React.createElement('div', { style:{ padding:'4px 0' }},
+        available.map(item =>
+          React.createElement('div', { key:item, onClick:()=>toggle(item), style:{ display:'flex',alignItems:'center',gap:8,padding:'6px 12px',cursor:'pointer',fontSize:12 }, onMouseOver:e=>e.currentTarget.style.background='#f3f4f6', onMouseOut:e=>e.currentTarget.style.background='transparent' },
+            React.createElement('span', { style:{ width:16 }}),
+            React.createElement('span', {}, item)
+          )
+        )
+      )
+    )
+  );
+}
+
+/* ─── Setup Modal (shown when no Apps Script URL is configured) ─── */
+function SetupBanner({ onDismiss }) {
+  const [collapsed, setCollapsed] = useState(false);
+  if (collapsed) return React.createElement('div', {
+    onClick:()=>setCollapsed(false),
+    style:{ padding:'8px 20px',background:'#fef3c7',borderBottom:'1px solid #fde68a',cursor:'pointer',fontSize:12,color:'#92400e',fontWeight:600,textAlign:'center' }
+  }, 'Running in demo mode \u2014 click for setup instructions');
+
+  return React.createElement('div', {
+    style:{ padding:'12px 20px',background:'#fef3c7',borderBottom:'1px solid #fde68a',fontSize:13,color:'#92400e' }
+  },
+    React.createElement('div', { style:{ display:'flex',justifyContent:'space-between',alignItems:'flex-start' }},
+      React.createElement('div', {},
+        React.createElement('strong', {}, 'Connect to Google Sheets to save & share data'),
+        React.createElement('ol', { style:{ margin:'6px 0 0 18px',lineHeight:1.8 }},
+          React.createElement('li', {}, 'Create a new Google Sheet and open Extensions \u2192 Apps Script'),
+          React.createElement('li', {}, React.createElement('span', {}, 'Paste the code from '), React.createElement('code', { style:{ background:'#fff',padding:'1px 4px',borderRadius:3 }}, 'google-apps-script.js'), ' and click the Run button on the ', React.createElement('code', { style:{ background:'#fff',padding:'1px 4px',borderRadius:3 }}, 'setup'), ' function'),
+          React.createElement('li', {}, 'Click Deploy \u2192 New deployment \u2192 Web app \u2192 set access to "Anyone" \u2192 Deploy'),
+          React.createElement('li', {}, 'Copy the Web App URL and paste it into the ', React.createElement('code', { style:{ background:'#fff',padding:'1px 4px',borderRadius:3 }}, 'APPS_SCRIPT_URL'), ' variable at the top of this HTML file'),
+          React.createElement('li', {}, 'Refresh this page \u2014 done!')
+        )
+      ),
+      React.createElement('button', { onClick:()=>setCollapsed(true), style:{ background:'none',border:'none',fontSize:18,cursor:'pointer',color:'#92400e',padding:'0 4px' }}, '\u2715')
+    )
+  );
+}
+
+/* ─── User Picker Modal ─── */
+function UserPickerModal({ open, onSelect, allUsers }) {
+  const [selected, setSelected] = useState('');
+  const [custom, setCustom] = useState('');
+  const finalName = selected === '__custom__' ? custom.trim() : selected;
+  if (!open) return null;
+  return React.createElement(Modal, { open, onClose:()=>{}, title:'Who are you?', width:380 },
+    React.createElement('div', { style:{ display:'flex',flexDirection:'column',gap:12 }},
+      React.createElement('p', { style:{ fontSize:13,color:'#64748b',margin:0 }}, 'Select your name so we can track activity on the Job Board.'),
+      React.createElement('select', {
+        value: selected,
+        onChange: e => { setSelected(e.target.value); if (e.target.value !== '__custom__') setCustom(''); },
+        style:{ padding:'10px 12px',borderRadius:8,border:'1px solid #d1d5db',fontSize:14,width:'100%',outline:'none',cursor:'pointer' }
+      },
+        React.createElement('option', { value:'' }, '-- Select your name --'),
+        allUsers.map(u => React.createElement('option', { key:u, value:u }, u)),
+        React.createElement('option', { value:'__custom__' }, 'Other (type my name)...')
+      ),
+      selected === '__custom__' && React.createElement('input', {
+        type:'text', value:custom, onChange:e=>setCustom(e.target.value), placeholder:'Type your name...',
+        style:{ padding:'10px 12px',borderRadius:8,border:'1px solid #d1d5db',fontSize:14,width:'100%',outline:'none' },
+        autoFocus: true
+      }),
+      React.createElement('button', {
+        onClick:() => { if (finalName) onSelect(finalName); },
+        disabled: !finalName,
+        style:{ padding:'10px',borderRadius:8,border:'none',background: finalName ? '#2563eb':'#94a3b8',color:'#fff',fontWeight:600,fontSize:14,cursor: finalName ? 'pointer':'not-allowed' }
+      }, 'Continue')
+    )
+  );
+}
+
+/* ─── Activity Dashboard Modal ─── */
+function ActivityDashboard({ open, onClose }) {
+  const [activity, setActivity] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [tab, setTab] = useState('daily'); /* 'daily' or 'feed' */
+
+  useEffect(() => {
+    if (open && !activity) {
+      setLoading(true);
+      api.getActivity().then(data => { setActivity(data.activity || []); setLoading(false); }).catch(() => { setActivity([]); setLoading(false); });
+    }
+  }, [open]);
+
+  /* Build daily active summary from activity log */
+  const dailySummary = useMemo(() => {
+    if (!activity) return [];
+    const byDay = {};
+    for (const a of activity) {
+      const day = a.timestamp ? a.timestamp.substring(0, 10) : 'unknown';
+      if (!byDay[day]) byDay[day] = { date: day, users: new Set(), actions: 0 };
+      byDay[day].users.add(a.user);
+      byDay[day].actions++;
+    }
+    return Object.values(byDay).sort((a,b) => b.date.localeCompare(a.date)).slice(0, 30).map(d => ({ ...d, users: [...d.users] }));
+  }, [activity]);
+
+  /* User totals for the last 14 days */
+  const userTotals = useMemo(() => {
+    if (!activity) return [];
+    const cutoff = fmtDate(addDays(new Date(), -14));
+    const recent = activity.filter(a => a.timestamp && a.timestamp >= cutoff);
+    const counts = {};
+    for (const a of recent) {
+      if (!counts[a.user]) counts[a.user] = { user: a.user, days: new Set(), actions: 0, lastSeen: '' };
+      counts[a.user].days.add(a.timestamp.substring(0, 10));
+      counts[a.user].actions++;
+      if (a.timestamp > counts[a.user].lastSeen) counts[a.user].lastSeen = a.timestamp;
+    }
+    return Object.values(counts).sort((a,b) => b.actions - a.actions).map(u => ({ ...u, days: u.days.size }));
+  }, [activity]);
+
+  if (!open) return null;
+
+  const tabBtn = (id, label) => React.createElement('button', {
+    onClick:()=>setTab(id),
+    style:{ padding:'6px 14px',borderRadius:6,border:'none',background:tab===id?'#fff':'transparent',boxShadow:tab===id?'0 1px 2px rgba(0,0,0,0.08)':'none',cursor:'pointer',fontSize:12,fontWeight:tab===id?700:500,color:tab===id?'#2563eb':'#6b7280' }
+  }, label);
+
+  const actionIcons = { board_open:'📱', project_create:'➕', project_edit:'✏️', project_delete:'👑️', project_split:'✂️', cc_toggle:'☑️' };
+  const actionLabels = { board_open:'Opened board', project_create:'Created project', project_edit:'Edited project', project_delete:'Deleted project', project_split:'Split project', cc_toggle:'CC check' };
+
+  return React.createElement(Modal, { open, onClose, title:'Usage Dashboard', width:600 },
+    React.createElement('div', { style:{ display:'flex',flexDirection:'column',gap:12 }},
+      React.createElement('div', { style:{ display:'flex',gap:2,background:'#f3f4f6',borderRadius:8,padding:2,alignSelf:'flex-start' }}, tabBtn('daily','PM Activity'), tabBtn('feed','Recent Actions')),
+
+      loading && React.createElement('div', { style:{ textAlign:'center',padding:20,color:'#6b7280',fontSize:13 }}, 'Loading activity data...'),
+
+      !loading && tab === 'daily' && React.createElement('div', {},
+        React.createElement('p', { style:{ fontSize:12,color:'#6b7280',margin:'0 0 8px' }}, 'Last 14 days — who’s been active:'),
+        userTotals.length === 0 ? React.createElement('p', { style:{ fontSize:13,color:'#94a3b8',textAlign:'center',padding:16 }}, 'No activity recorded yet. Activity will appear once PMs start using the board.') :
+        React.createElement('table', { style:{ width:'100%',borderCollapse:'collapse',fontSize:13 }},
+          React.createElement('thead', {},
+            React.createElement('tr', { style:{ borderBottom:'2px solid #e5e7eb',textAlign:'left' }},
+              React.createElement('th', { style:{ padding:'8px 10px',fontWeight:600,color:'#374151' }}, 'Name'),
+              React.createElement('th', { style:{ padding:'8px 10px',fontWeight:600,color:'#374151',textAlign:'center' }}, 'Days Active'),
+              React.createElement('th', { style:{ padding:'8px 10px',fontWeight:600,color:'#374151',textAlign:'center' }}, 'Actions'),
+              React.createElement('th', { style:{ padding:'8px 10px',fontWeight:600,color:'#374151' }}, 'Last Seen')
+            )
+          ),
+          React.createElement('tbody', {},
+            userTotals.map(u => React.createElement('tr', { key:u.user, style:{ borderBottom:'1px solid #f1f5f9' }},
+              React.createElement('td', { style:{ padding:'8px 10px',fontWeight:600,color:'#1e293b' }}, u.user),
+              React.createElement('td', { style:{ padding:'8px 10px',textAlign:'center',color: u.days >= 10 ? '#16a34a' : u.days >= 5 ? '#ca8a04' : '#dc2626',fontWeight:700 }}, u.days + '/14'),
+              React.createElement('td', { style:{ padding:'8px 10px',textAlign:'center',color:'#64748b' }}, u.actions),
+              React.createElement('td', { style:{ padding:'8px 10px',color:'#64748b',fontSize:12 }}, u.lastSeen ? new Date(u.lastSeen).toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '-')
+            ))
+          )
+        ),
+        /* Daily breakdown */
+        dailySummary.length > 0 && React.createElement('div', { style:{ marginTop:16 }},
+          React.createElement('p', { style:{ fontSize:12,color:'#6b7280',margin:'0 0 8px',fontWeight:600 }}, 'Daily breakdown:'),
+          React.createElement('div', { style:{ maxHeight:200,overflow:'auto' }},
+            dailySummary.map(d => React.createElement('div', { key:d.date, style:{ display:'flex',justifyContent:'space-between',alignItems:'center',padding:'6px 10px',borderBottom:'1px solid #f1f5f9',fontSize:12 }},
+              React.createElement('span', { style:{ fontWeight:600,color:'#374151' }}, new Date(d.date+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})),
+              React.createElement('span', { style:{ color:'#64748b' }}, d.users.join(', ')),
+              React.createElement('span', { style:{ color:'#94a3b8',fontSize:11 }}, d.actions + ' actions')
+            ))
+          )
+        )
+      ),
+
+      !loading && tab === 'feed' && React.createElement('div', { style:{ maxHeight:400,overflow:'auto' }},
+        (!activity || activity.length === 0) ? React.createElement('p', { style:{ fontSize:13,color:'#94a3b8',textAlign:'center',padding:16 }}, 'No activity recorded yet.') :
+        activity.slice(0, 100).map((a, i) => React.createElement('div', { key:i, style:{ display:'flex',alignItems:'flex-start',gap:8,padding:'8px 10px',borderBottom:'1px solid #f1f5f9',fontSize:12 }},
+          React.createElement('span', { style:{ fontSize:14,flexShrink:0 }}, actionIcons[a.action] || '📌'),
+          React.createElement('div', { style:{ flex:1,minWidth:0 }},
+            React.createElement('span', { style:{ fontWeight:600,color:'#1e293b' }}, a.user || 'Unknown'),
+            React.createElement('span', { style:{ color:'#64748b' }}, ' ' + (actionLabels[a.action] || a.action)),
+            a.details && React.createElement('span', { style:{ color:'#94a3b8' }}, ' — ' + a.details),
+          ),
+          React.createElement('span', { style:{ fontSize:11,color:'#94a3b8',whiteSpace:'nowrap',flexShrink:0 }}, a.timestamp ? new Date(a.timestamp).toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '')
+        ))
+      )
+    )
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MAIN APP
+   ═══════════════════════════════════════════════════════════════ */
+function App() {
+  const [projects, setProjects] = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [equipment, setEquipment] = useState([]);
+  const [nextId, setNextId] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [syncStatus, setSyncStatus] = useState(api.isConnected() ? 'saving' : 'offline');
+
+  const [baseDate, setBaseDate] = useState(getMonday(new Date()));
+  const [numWeeks, setNumWeeks] = useState(1);
+  const [showProjectModal, setShowProjectModal] = useState(false);
+  const [editProject, setEditProject] = useState(null);
+  const [showImport, setShowImport] = useState(false);
+  const [showEmployees, setShowEmployees] = useState(false);
+  const [showEquipment, setShowEquipment] = useState(false);
+  const [showDashboard, setShowDashboard] = useState(false);
+  const [tbdQueue, setTBDQueue] = useState([]);
+  const [showTBDQueue, setShowTBDQueue] = useState(true);
+  const [newTBDItem, setNewTBDItem] = useState('');
+
+  /* ── User identity (stored in localStorage) ── */
+  const [currentUser, setCurrentUser] = useState(() => {
+    try { return localStorage.getItem('jobboard_user') || ''; } catch { return ''; }
+  });
+  const [showUserPicker, setShowUserPicker] = useState(false);
+
+  function selectUser(name) {
+    setCurrentUser(name);
+    try { localStorage.setItem('jobboard_user', name); } catch {}
+    setShowUserPicker(false);
+    /* Log board open when user first identifies */
+    if (api.isConnected()) api.logActivity({ user: name, action: 'board_open', details: '', timestamp: new Date().toISOString() });
+  }
+
+  /* ── Activity logging helper ── */
+  function logAction(action, details) {
+    if (!api.isConnected() || !currentUser) return;
+    api.logActivity({ user: currentUser, action, details: details || '', timestamp: new Date().toISOString() });
+  }
+  const [quickEdit, setQuickEdit] = useState(null);
+  const [hoveredProject, setHoveredProject] = useState(null);
+  const [viewMode, setViewMode] = useState('employees'); /* 'employees', 'equipment', or 'byPerson' */
+  const [projectOrder, setProjectOrder] = useState([]); /* array of project IDs for display order */
+  const dragRef = useRef(null); /* tracks which project ID is being dragged */
+
+  /* ── Keep projectOrder in sync — add new projects, remove deleted ones ── */
+  useEffect(() => {
+    setProjectOrder(prev => {
+      const ids = new Set(projects.map(p => p.id));
+      const kept = prev.filter(id => ids.has(id));
+      const newIds = projects.filter(p => !kept.includes(p.id)).map(p => p.id);
+      if (newIds.length === 0 && kept.length === prev.length) return prev;
+      return [...kept, ...newIds];
+    });
+  }, [projects]);
+
+  /* ── Load data on mount ── */
+  useEffect(() => {
+    async function load() {
+      if (api.isConnected()) {
+        try {
+          const data = await api.getAll();
+          if (data.success) {
+            const sorted = [...data.projects].sort((a,b) => (a.sortOrder||0) - (b.sortOrder||0));
+            setProjects(sorted);
+            setProjectOrder(sorted.map(p => p.id));
+            setEmployees((data.employees || []).filter(function(e){ return !PROJECT_MANAGERS.includes(e); }));
+            setEquipment(data.equipment || []);
+            setTBDQueue(data.tbdQueue || []);
+            setNextId(data.nextId);
+            setSyncStatus('saved');
+          } else {
+            throw new Error(data.error);
+          }
+        } catch (err) {
+          console.error('Failed to load from Google Sheets:', err);
+          const demo = getDemoData();
+          setProjects(demo.projects); setEmployees(demo.employees); setEquipment(demo.equipment || []); setNextId(demo.nextId);
+          setSyncStatus('error');
+        }
+      } else {
+        const demo = getDemoData();
+        setProjects(demo.projects); setEmployees(demo.employees); setEquipment(demo.equipment || []); setNextId(demo.nextId);
+        setSyncStatus('offline');
+      }
+      setLoading(false);
+    }
+    load();
+  }, []);
+
+  /* ── Show user picker if no user identified; log board open for returning users ── */
+  useEffect(() => {
+    if (!loading) {
+      if (!currentUser) { setShowUserPicker(true); }
+      else if (api.isConnected()) { api.logActivity({ user: currentUser, action: 'board_open', details: '', timestamp: new Date().toISOString() }); }
+    }
+  }, [loading]);
+
+  /* ── Auto-refresh from Google Sheets every 30 seconds ── */
+  useEffect(() => {
+    if (!api.isConnected()) return;
+    const interval = setInterval(async () => {
+      try {
+        const data = await api.getAll();
+        if (data.success) {
+          const sorted = [...data.projects].sort((a,b) => (a.sortOrder||0) - (b.sortOrder||0));
+          setProjects(sorted);
+          setProjectOrder(sorted.map(p => p.id));
+          setEmployees((data.employees || []).filter(function(e){ return !PROJECT_MANAGERS.includes(e); }));
+          setEquipment(data.equipment || []);
+          setTBDQueue(data.tbdQueue || []);
+          setNextId(data.nextId);
+          setSyncStatus('saved');
+        }
+      } catch (err) { /* silent fail on background sync */ }
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const totalDays = numWeeks * 7;
+  const days = useMemo(() => { const r=[]; for(let i=0;i<totalDays;i++) r.push(addDays(baseDate,i)); return r; }, [baseDate, totalDays]);
+  const weeks = useMemo(() => { const w=[]; for(let i=0;i<numWeeks;i++) w.push(days.slice(i*7,(i+1)*7)); return w; }, [days, numWeeks]);
+
+  function getProjectsForDay(date) { const ds=fmtDate(date); return projects.filter(p=>p.startDate<=ds&&p.endDate>=ds); }
+
+  /* ── Compute spanning project segments for a week row ── */
+  function getWeekSegments(weekDays) {
+    const ws = fmtDate(weekDays[0]), we = fmtDate(weekDays[6]);
+    const segs = [];
+    for (const p of projects) {
+      if (p.endDate < ws || p.startDate > we) continue;
+      let sc = 0;
+      if (p.startDate > ws) { for (let i=0;i<7;i++) { if (fmtDate(weekDays[i])>=p.startDate){sc=i;break;} } }
+      let ec = 6;
+      if (p.endDate < we) { for (let i=6;i>=0;i--) { if (fmtDate(weekDays[i])<=p.endDate){ec=i;break;} } }
+      segs.push({ project:p, startCol:sc, endCol:Math.max(sc,ec), isStart:p.startDate>=ws, isEnd:p.endDate<=we });
+    }
+    segs.sort((a,b)=>{
+      const ai = projectOrder.indexOf(a.project.id), bi = projectOrder.indexOf(b.project.id);
+      const oa = ai >= 0 ? ai : 9999, ob = bi >= 0 ? bi : 9999;
+      return oa - ob || a.startCol - b.startCol;
+    });
+    const lanes=[];
+    for (const s of segs) {
+      let placed=false;
+      for (let i=0;i<lanes.length;i++){
+        if(lanes[i].every(x=>x.endCol<s.startCol||x.startCol>s.endCol)){lanes[i].push(s);s.lane=i;placed=true;break;}
+      }
+      if(!placed){s.lane=lanes.length;lanes.push([s]);}
+    }
+    return { segments:segs, numLanes:lanes.length };
+  }
+
+  /* ── CRUD with Google Sheets sync ── */
+  async function handleSaveProject(data) {
+    if (!data.equipment) data.equipment = [];
+    const newEmps = data.employees.filter(e => !employees.includes(e));
+    if (newEmps.length > 0) setEmployees(prev => [...prev, ...newEmps.filter(function(e){ return !PROJECT_MANAGERS.includes(e); })]);
+    const newEquips = data.equipment.filter(e => !equipment.includes(e));
+    if (newEquips.length > 0) setEquipment(prev => [...prev, ...newEquips]);
+
+    if (data.id) {
+      // Update existing
+      setProjects(prev => prev.map(p => p.id === data.id ? { ...p, ...data } : p));
+      logAction('project_edit', data.name);
+      if (api.isConnected()) {
+        setSyncStatus('saving');
+        try { await api.updateProject(data); setSyncStatus('saved'); }
+        catch { setSyncStatus('error'); }
+      }
+    } else {
+      // Create new — assign sortOrder at the end
+      data.sortOrder = projectOrder.length;
+      const newProject = { ...data, id: nextId };
+      setProjects(prev => [...prev, newProject]);
+      setNextId(prev => prev + 1);
+      logAction('project_create', data.name);
+      if (api.isConnected()) {
+        setSyncStatus('saving');
+        try {
+          const res = await api.createProject(data);
+          if (res.id) {
+            setProjects(prev => prev.map(p => p.id === newProject.id ? { ...p, id: res.id } : p));
+          }
+          setSyncStatus('saved');
+        } catch { setSyncStatus('error'); }
+      }
+    }
+  }
+
+  async function handleDeleteProject(id) {
+    const delName = projects.find(p => p.id === id)?.name || '';
+    setProjects(prev => prev.filter(p => p.id !== id));
+    logAction('project_delete', delName);
+    if (api.isConnected()) {
+      setSyncStatus('saving');
+      try { await api.deleteProject(id); setSyncStatus('saved'); }
+      catch { setSyncStatus('error'); }
+    }
+  }
+
+  async function handleSplitProject(project, splitDateStr) {
+    logAction('project_split', project.name + ' at ' + splitDateStr);
+    /* Split a project into two parts at splitDateStr.
+       Part 1: original start → day before split date (keeps original crew)
+       Part 2: split date → original end (keeps original crew, user edits after) */
+    const dayBefore = fmtDate(addDays(new Date(splitDateStr+'T00:00:00'), -1));
+    const cc = project.ccChecks || {};
+    const cc1 = {}, cc2 = {};
+    for (const [d,v] of Object.entries(cc)) { if (d <= dayBefore) cc1[d]=v; else cc2[d]=v; }
+    const part1 = { name: project.name, startDate: project.startDate, endDate: dayBefore, color: project.color, employees: [...project.employees], equipment: [...(project.equipment||[])], ccChecks: cc1 };
+    const part2 = { name: project.name, startDate: splitDateStr, endDate: project.endDate, color: project.color, employees: [...project.employees], equipment: [...(project.equipment||[])], ccChecks: cc2 };
+
+    /* Remove original project */
+    setProjects(prev => prev.filter(p => p.id !== project.id));
+
+    /* Create both parts with new IDs */
+    let id = nextId;
+    const newPart1 = { ...part1, id: id };
+    const newPart2 = { ...part2, id: id + 1 };
+    setProjects(prev => [...prev, newPart1, newPart2]);
+    setNextId(id + 2);
+
+    /* Sync with Google Sheets */
+    if (api.isConnected()) {
+      setSyncStatus('saving');
+      try {
+        await api.deleteProject(project.id);
+        const res1 = await api.createProject(part1);
+        if (res1.id) setProjects(prev => prev.map(p => p.id === newPart1.id ? { ...p, id: res1.id } : p));
+        const res2 = await api.createProject(part2);
+        if (res2.id) setProjects(prev => prev.map(p => p.id === newPart2.id ? { ...p, id: res2.id } : p));
+        setSyncStatus('saved');
+      } catch { setSyncStatus('error'); }
+    }
+
+    /* Open Part 2 for editing so user can adjust the crew */
+    setTimeout(() => {
+      setEditProject(newPart2);
+      setShowProjectModal(true);
+    }, 300);
+  }
+
+  /* ── Toggle CC (CompanyCam) check for a project on a specific day ── */
+  async function handleToggleCC(projectId, dateStr) {
+    const ccProject = projects.find(p => p.id === projectId);
+    logAction('cc_toggle', (ccProject?.name || '') + ' on ' + dateStr);
+    let updatedProject;
+    setProjects(prev => prev.map(p => {
+      if (p.id !== projectId) return p;
+      const ccChecks = { ...(p.ccChecks || {}), [dateStr]: !(p.ccChecks && p.ccChecks[dateStr]) };
+      updatedProject = { ...p, ccChecks };
+      return updatedProject;
+    }));
+    if (api.isConnected() && updatedProject) {
+      setSyncStatus('saving');
+      try { await api.updateProject(updatedProject); setSyncStatus('saved'); }
+      catch { setSyncStatus('error'); }
+    }
+  }
+
+  async function handleImportProjects(imported) {
+    let id = nextId;
+    const newProjects = imported.map(p => ({ ...p, id: id++, color: PROJECT_COLORS[(id-1)%PROJECT_COLORS.length] }));
+    setProjects(prev => [...prev, ...newProjects]);
+    setNextId(id);
+    const allNewEmps = [...new Set(imported.flatMap(p=>p.employees))].filter(e=>!employees.includes(e));
+    if (allNewEmps.length > 0) setEmployees(prev => [...prev, ...allNewEmps.filter(function(e){ return !PROJECT_MANAGERS.includes(e); })]);
+    if (api.isConnected()) {
+      setSyncStatus('saving');
+      try { await api.importProjects(newProjects); setSyncStatus('saved'); }
+      catch { setSyncStatus('error'); }
+    }
+  }
+
+  async function handleQuickUpdate(updated) {
+    setProjects(prev => prev.map(p => p.id === updated.id ? updated : p));
+    setQuickEdit(qe => qe ? { ...qe, project: updated } : null);
+    if (api.isConnected()) {
+      setSyncStatus('saving');
+      try { await api.updateProject(updated); setSyncStatus('saved'); }
+      catch { setSyncStatus('error'); }
+    }
+  }
+
+  async function handleUpdateEmployees(newEmps) {
+    setEmployees(newEmps);
+    if (api.isConnected()) {
+      setSyncStatus('saving');
+      try { await api.updateEmployees(newEmps); setSyncStatus('saved'); }
+      catch { setSyncStatus('error'); }
+    }
+  }
+
+  async function handleUpdateEquipment(newEquips) {
+    setEquipment(newEquips);
+    if (api.isConnected()) {
+      setSyncStatus('saving');
+      try { await api.updateEquipment(newEquips); setSyncStatus('saved'); }
+      catch { setSyncStatus('error'); }
+    }
+  }
+
+  /* ── TBD Queue handlers ── */
+  async function handleAddTBDItem() {
+    if (!newTBDItem.trim()) return;
+    const updated = [...tbdQueue, newTBDItem.trim()];
+    setTBDQueue(updated);
+    setNewTBDItem('');
+    if (api.isConnected()) {
+      setSyncStatus('saving');
+      try { await api.updateTBDQueue(updated); setSyncStatus('saved'); }
+      catch { setSyncStatus('error'); }
+    }
+    logAction('tbd_add', newTBDItem.trim());
+  }
+
+  async function handleRemoveTBDItem(index) {
+    const removed = tbdQueue[index];
+    const updated = tbdQueue.filter((_, i) => i !== index);
+    setTBDQueue(updated);
+    if (api.isConnected()) {
+      setSyncStatus('saving');
+      try { await api.updateTBDQueue(updated); setSyncStatus('saved'); }
+      catch { setSyncStatus('error'); }
+    }
+    logAction('tbd_remove', removed);
+  }
+
+  function navigateWeeks(n) { setBaseDate(addDays(baseDate, n*7)); }
+  function goToToday() { setBaseDate(getMonday(new Date())); }
+
+  const today = fmtDate(new Date());
+  const usedColors = projects.map(p => p.color);
+
+  /* ── Overbooking detection: find employees assigned to 2+ projects on the same day (visible weeks only) ── */
+  const overbookedEmps = useMemo(() => {
+    const empDayMap = {}; // { empName: { date: [projectName, ...] } }
+    const visStart = days.length > 0 ? fmtDate(days[0]) : '';
+    const visEnd = days.length > 0 ? fmtDate(days[days.length - 1]) : '';
+    for (const p of projects) {
+      const start = parseDate(p.startDate), end = parseDate(p.endDate);
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate()+1)) {
+        const ds = fmtDate(d);
+        if (ds < visStart || ds > visEnd) continue;
+        for (const emp of p.employees) {
+          if (!empDayMap[emp]) empDayMap[emp] = {};
+          if (!empDayMap[emp][ds]) empDayMap[emp][ds] = [];
+          empDayMap[emp][ds].push(p.name);
+        }
+      }
+    }
+    const conflicts = {}; // { empName: [{ date, projects: [...] }, ...] }
+    for (const emp of Object.keys(empDayMap)) {
+      for (const ds of Object.keys(empDayMap[emp])) {
+        if (empDayMap[emp][ds].length > 1) {
+          if (!conflicts[emp]) conflicts[emp] = [];
+          conflicts[emp].push({ date: ds, projects: empDayMap[emp][ds] });
+        }
+      }
+    }
+    return conflicts;
+  }, [projects, days]);
+
+  const overbookedSet = useMemo(() => new Set(Object.keys(overbookedEmps)), [overbookedEmps]);
+
+  /* ── Equipment overbooking detection (visible weeks only) ── */
+  const overbookedEquip = useMemo(() => {
+    const equipDayMap = {};
+    const visStart = days.length > 0 ? fmtDate(days[0]) : '';
+    const visEnd = days.length > 0 ? fmtDate(days[days.length - 1]) : '';
+    for (const p of projects) {
+      const start = parseDate(p.startDate), end = parseDate(p.endDate);
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate()+1)) {
+        const ds = fmtDate(d);
+        if (ds < visStart || ds > visEnd) continue;
+        for (const eq of (p.equipment||[])) {
+          if (!equipDayMap[eq]) equipDayMap[eq] = {};
+          if (!equipDayMap[eq][ds]) equipDayMap[eq][ds] = [];
+          equipDayMap[eq][ds].push(p.name);
+        }
+      }
+    }
+    const conflicts = {};
+    for (const eq of Object.keys(equipDayMap)) {
+      for (const ds of Object.keys(equipDayMap[eq])) {
+        if (equipDayMap[eq][ds].length > 1) {
+          if (!conflicts[eq]) conflicts[eq] = [];
+          conflicts[eq].push({ date: ds, projects: equipDayMap[eq][ds] });
+        }
+      }
+    }
+    return conflicts;
+  }, [projects, days]);
+
+  const overbookedEquipSet = useMemo(() => new Set(Object.keys(overbookedEquip)), [overbookedEquip]);
+
+  /* ── Available employees per day (unassigned to any project) ── */
+  const [showAvailability, setShowAvailability] = useState(true);
+
+  const availableByDay = useMemo(() => {
+    const result = {};
+    for (const day of days) {
+      const ds = fmtDate(day);
+      const assignedToday = new Set();
+      for (const p of projects) {
+        if (p.startDate <= ds && p.endDate >= ds) {
+          for (const emp of p.employees) assignedToday.add(emp);
+        }
+      }
+      result[ds] = employees.filter(emp => !assignedToday.has(emp));
+    }
+    return result;
+  }, [days, projects, employees]);
+
+  /* ── By Person view: for each assigned employee, map their projects per day ── */
+  const byPersonData = useMemo(() => {
+    const empSet = new Set();
+    for (const p of projects) {
+      for (const day of days) {
+        const ds = fmtDate(day);
+        if (p.startDate <= ds && p.endDate >= ds) {
+          for (const emp of p.employees) empSet.add(emp);
+        }
+      }
+    }
+    const assignedEmps = [...empSet].sort((a,b) => a.localeCompare(b));
+    const grid = {};
+    for (const emp of assignedEmps) {
+      grid[emp] = {};
+      for (const day of days) {
+        const ds = fmtDate(day);
+        grid[emp][ds] = projects.filter(p => p.startDate <= ds && p.endDate >= ds && p.employees.includes(emp));
+      }
+    }
+    return { employees: assignedEmps, grid };
+  }, [days, projects]);
+
+  const monthYearLabel = useMemo(() => {
+    if (days.length === 0) return '';
+    const first=days[0]; const last=days[days.length-1];
+    const mo=['January','February','March','April','May','June','July','August','September','October','November','December'];
+    if (first.getMonth()===last.getMonth()) return `${mo[first.getMonth()]} ${first.getFullYear()}`;
+    if (first.getFullYear()===last.getFullYear()) return `${mo[first.getMonth()]} \u2013 ${mo[last.getMonth()]} ${first.getFullYear()}`;
+    return `${mo[first.getMonth()]} ${first.getFullYear()} \u2013 ${mo[last.getMonth()]} ${last.getFullYear()}`;
+  }, [days]);
+
+  if (loading) return React.createElement('div', { style:{ display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',fontSize:16,color:'#6b7280' }}, 'Loading Job Board...');
+
+  /* ─── Render ─── */
+  return React.createElement('div', { style:{ display:'flex',flexDirection:'column',height:'100vh',overflow:'hidden' }},
+
+    /* Setup banner when not connected */
+    !api.isConnected() && React.createElement(SetupBanner),
+
+    /* ── Header ── */
+    React.createElement('div', {
+      style:{ display:'flex',alignItems:'center',justifyContent:'space-between',padding:'6px 10px',background:'#fff',borderBottom:'1px solid #e5e7eb',boxShadow:'0 1px 3px rgba(0,0,0,0.05)',flexShrink:0,flexWrap:'wrap',gap:4 }
+    },
+      React.createElement('div', { style:{ display:'flex',alignItems:'center',gap:8,flexWrap:'wrap' }},
+        React.createElement('h1', { style:{ fontSize:18,fontWeight:800,color:'#1e293b',letterSpacing:'-0.02em' }}, 'Job Board'),
+        /* Nav arrows + Sync badge stacked */
+        React.createElement('div', { style:{ display:'flex',flexDirection:'column',gap:2,alignItems:'flex-start' }},
+          React.createElement('div', { style:{ display:'flex',alignItems:'center',gap:3 }},
+            /* Nav arrows */
+            React.createElement('div', { style:{ display:'flex',alignItems:'center',gap:1,background:'#f3f4f6',borderRadius:6,padding:1 }},
+              React.createElement('button', { onClick:()=>navigateWeeks(-numWeeks), style:{ padding:'3px 7px',borderRadius:4,border:'none',background:'transparent',cursor:'pointer',fontSize:12,color:'#6b7280',fontWeight:600 }, title:`Back ${numWeeks} weeks` }, '⟪'),
+              React.createElement('button', { onClick:()=>navigateWeeks(-1), style:{ padding:'3px 7px',borderRadius:4,border:'none',background:'transparent',cursor:'pointer',fontSize:12,color:'#6b7280',fontWeight:600 }, title:'Back 1 week' }, '⟨'),
+              React.createElement('button', { onClick:goToToday, style:{ padding:'3px 10px',borderRadius:4,border:'none',background:'#fff',cursor:'pointer',fontSize:11,fontWeight:600,color:'#2563eb',boxShadow:'0 1px 2px rgba(0,0,0,0.08)' }}, 'Today'),
+              React.createElement('button', { onClick:()=>navigateWeeks(1), style:{ padding:'3px 7px',borderRadius:4,border:'none',background:'transparent',cursor:'pointer',fontSize:12,color:'#6b7280',fontWeight:600 }}, '⟩'),
+              React.createElement('button', { onClick:()=>navigateWeeks(numWeeks), style:{ padding:'3px 7px',borderRadius:4,border:'none',background:'transparent',cursor:'pointer',fontSize:12,color:'#6b7280',fontWeight:600 }, title:`Forward ${numWeeks} weeks` }, '⟫')
+            ),
+            /* Week count selector */
+            React.createElement('div', { style:{ display:'flex',alignItems:'center',gap:1,background:'#f3f4f6',borderRadius:6,padding:1 }},
+              [1,2,3,4].map(n => React.createElement('button', {
+                key:n, onClick:()=>setNumWeeks(n),
+                style:{ padding:'3px 7px',borderRadius:4,border:'none',background: numWeeks===n ? '#fff':'transparent',boxShadow: numWeeks===n ? '0 1px 2px rgba(0,0,0,0.08)':'none',cursor:'pointer',fontSize:10,fontWeight: numWeeks===n ? 700:500,color: numWeeks===n ? '#2563eb':'#6b7280',transition:'all 0.15s' }
+              }, `${n}W`))
+            )
+          ),
+          /* Sync badge below Today toggle */
+          React.createElement(SyncBadge, { status: syncStatus })
+        ),
+        React.createElement('span', { style:{ fontSize:14,fontWeight:600,color:'#374151' }}, monthYearLabel),
+        /* View mode toggle */
+        React.createElement('div', { style:{ display:'flex',alignItems:'center',gap:1,background:'#f3f4f6',borderRadius:6,padding:1 }},
+          React.createElement('button', {
+            onClick:()=>setViewMode('employees'),
+            style:{ padding:'3px 8px',borderRadius:4,border:'none',background:viewMode==='employees'?'#fff':'transparent',boxShadow:viewMode==='employees'?'0 1px 2px rgba(0,0,0,0.08)':'none',cursor:'pointer',fontSize:11,fontWeight:viewMode==='employees'?700:500,color:viewMode==='employees'?'#2563eb':'#6b7280',transition:'all 0.15s',display:'flex',alignItems:'center',gap:3 }
+          }, '👤 Employees'),
+          React.createElement('button', {
+            onClick:()=>setViewMode('equipment'),
+            style:{ padding:'3px 8px',borderRadius:4,border:'none',background:viewMode==='equipment'?'#fff':'transparent',boxShadow:viewMode==='equipment'?'0 1px 2px rgba(0,0,0,0.08)':'none',cursor:'pointer',fontSize:11,fontWeight:viewMode==='equipment'?700:500,color:viewMode==='equipment'?'#ea580c':'#6b7280',transition:'all 0.15s',display:'flex',alignItems:'center',gap:3 }
+          }, '🛠️ Equipment'),
+          React.createElement('button', {
+            onClick:()=>setViewMode('byPerson'),
+            style:{ padding:'3px 8px',borderRadius:4,border:'none',background:viewMode==='byPerson'?'#fff':'transparent',boxShadow:viewMode==='byPerson'?'0 1px 2px rgba(0,0,0,0.08)':'none',cursor:'pointer',fontSize:11,fontWeight:viewMode==='byPerson'?700:500,color:viewMode==='byPerson'?'#7c3aed':'#6b7280',transition:'all 0.15s',display:'flex',alignItems:'center',gap:3 }
+          }, '📅 By Person')
+        )
+      ),
+      React.createElement('div', { style:{ display:'flex',gap:6,alignItems:'center' }},
+        /* Current user identity */
+        currentUser && React.createElement('div', {
+          onClick:()=>setShowUserPicker(true),
+          style:{ display:'flex',alignItems:'center',gap:4,padding:'3px 8px',borderRadius:6,background:'#f0fdf4',border:'1px solid #bbf7d0',cursor:'pointer',fontSize:11,fontWeight:600,color:'#166534' },
+          title:'Click to switch user'
+        },
+          React.createElement('span', { style:{ fontSize:12 }}, '👤'),
+          currentUser
+        ),
+        /* Usage Dashboard button */
+        React.createElement('button', {
+          onClick:()=>setShowDashboard(true),
+          style:{ padding:'3px 8px',borderRadius:6,border:'1px solid #c4b5fd',background:'#faf5ff',color:'#7c3aed',fontWeight:600,fontSize:11,cursor:'pointer',display:'flex',alignItems:'center',gap:3 },
+          onMouseOver:e=>e.currentTarget.style.background='#f3e8ff', onMouseOut:e=>e.currentTarget.style.background='#faf5ff',
+          title:'View usage activity'
+        }, '📊 Activity'),
+        /* Stacked: Employees, Equipment, Import CSV */
+        React.createElement('div', { style:{ display:'flex',flexDirection:'column',gap:2 }},
+          React.createElement('button', {
+            onClick:()=>setShowEmployees(true),
+            style:{ padding:'2px 8px',borderRadius:4,border:'1px solid #d1d5db',background:'#fff',color:'#374151',fontWeight:600,fontSize:11,cursor:'pointer',whiteSpace:'nowrap' },
+            onMouseOver:e=>e.currentTarget.style.background='#f9fafb', onMouseOut:e=>e.currentTarget.style.background='#fff'
+          }, 'Employees'),
+          React.createElement('button', {
+            onClick:()=>setShowEquipment(true),
+            style:{ padding:'2px 8px',borderRadius:4,border:'1px solid #ea580c33',background:'#fff',color:'#ea580c',fontWeight:600,fontSize:11,cursor:'pointer',whiteSpace:'nowrap' },
+            onMouseOver:e=>e.currentTarget.style.background='#fff7ed', onMouseOut:e=>e.currentTarget.style.background='#fff'
+          }, 'Equipment'),
+          React.createElement('button', {
+            onClick:()=>setShowImport(true),
+            style:{ padding:'2px 8px',borderRadius:4,border:'1px solid #d1d5db',background:'#fff',color:'#374151',fontWeight:600,fontSize:11,cursor:'pointer',whiteSpace:'nowrap' },
+            onMouseOver:e=>e.currentTarget.style.background='#f9fafb', onMouseOut:e=>e.currentTarget.style.background='#fff'
+          }, 'Import CSV')
+        ),
+        React.createElement('button', {
+          onClick:()=>{ setEditProject(null); setShowProjectModal(true); },
+          style:{ padding:'6px 12px',borderRadius:6,border:'none',background:'#2563eb',color:'#fff',fontWeight:600,fontSize:11,cursor:'pointer',boxShadow:'0 1px 3px rgba(37,99,235,0.3)' },
+          onMouseOver:e=>e.currentTarget.style.background='#1d4ed8', onMouseOut:e=>e.currentTarget.style.background='#2563eb'
+        }, '+ New Project')
+      )
+    ),
+
+    /* ── Calendar Grid ── */
+    viewMode === 'byPerson' ?
+    /* ══ BY PERSON VIEW ══ */
+    React.createElement('div', { style:{ flex:1,overflow:'auto',padding:'12px' }},
+      React.createElement('div', { style:{ borderRadius:10,overflow:'hidden',border:'1px solid #e5e7eb' }},
+        /* Sticky header row with day names + dates */
+        weeks.map((week, wi) =>
+          React.createElement('div', { key:'bp-week-'+wi },
+            /* Day header row for this week */
+            React.createElement('div', {
+              style:{ display:'grid',gridTemplateColumns:'180px repeat(7, 1fr)',background: wi===0?'#f3f4f6':'#f9fafb',borderBottom:'1px solid #e5e7eb',borderTop: wi>0?'2px solid #d1d5db':'none' }
+            },
+              React.createElement('div', { style:{ padding:'8px 12px',fontWeight:700,fontSize:12,color:'#6b7280',textTransform:'uppercase',letterSpacing:'0.05em',borderRight:'1px solid #e5e7eb',display:'flex',alignItems:'center' }}, 'Employee'),
+              week.map((date, di) => {
+                const ds = fmtDate(date), isToday = ds === today;
+                return React.createElement('div', { key:'bph-'+ds, style:{ padding:'6px 8px',textAlign:'center',borderRight:di<6?'1px solid #e5e7eb':'none',background:isToday?'#eff6ff':'transparent' }},
+                  React.createElement('div', { style:{ fontSize:10,fontWeight:700,color: di>=5?'#94a3b8':'#6b7280',textTransform:'uppercase',letterSpacing:'0.05em' }}, ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][di]),
+                  React.createElement('div', { style:{ fontSize:13,fontWeight:isToday?800:600,color:isToday?'#2563eb':'#374151' }},
+                    date.getDate()===1 ? `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][date.getMonth()]} ${date.getDate()}` : date.getDate()
+                  )
+                );
+              })
+            ),
+            /* Employee rows for this week */
+            byPersonData.employees.map((emp, ei) =>
+              React.createElement('div', {
+                key:'bpr-'+emp+'-'+wi,
+                style:{ display:'grid',gridTemplateColumns:'180px repeat(7, 1fr)',borderBottom: ei<byPersonData.employees.length-1?'1px solid #f3f4f6':'none',minHeight:36 },
+                onMouseEnter:e=>e.currentTarget.style.background='#fafbfc', onMouseLeave:e=>e.currentTarget.style.background='transparent'
+              },
+                /* Employee name cell */
+                React.createElement('div', {
+                  style:{ padding:'4px 10px',borderRight:'1px solid #e5e7eb',display:'flex',alignItems:'center',fontSize:12,fontWeight:600,color: overbookedSet.has(emp)?'#dc2626':'#334155',background: overbookedSet.has(emp)?'#fef2f2':'transparent',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }
+                },
+                  wi === 0 ? emp : ''
+                ),
+                /* Day cells showing project assignments */
+                week.map((date, di) => {
+                  const ds = fmtDate(date);
+                  const isToday = ds === today;
+                  const projs = byPersonData.grid[emp]?.[ds] || [];
+                  return React.createElement('div', {
+                    key:'bpc-'+emp+'-'+ds,
+                    style:{ padding:'2px 3px',borderRight:di<6?'1px solid #f3f4f6':'none',background:isToday?'#eff6ff':'transparent',display:'flex',flexDirection:'column',gap:1,justifyContent:'center' }
+                  },
+                    projs.length === 0
+                      ? null
+                      : projs.map(p =>
+                          React.createElement('div', {
+                            key:p.id,
+                            onClick:e=>{e.stopPropagation();setEditProject(p);setShowProjectModal(true);},
+                            style:{ fontSize:10,fontWeight:600,color:p.color,background:p.color+'18',padding:'2px 5px',borderRadius:3,borderLeft:`2px solid ${p.color}`,cursor:'pointer',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',lineHeight:1.4 },
+                            title:p.name,
+                            onMouseOver:e=>e.currentTarget.style.opacity='0.8', onMouseOut:e=>e.currentTarget.style.opacity='1'
+                          }, p.name)
+                        )
+                  );
+                })
+              )
+            )
+          )
+        )
+      )
+    )
+    :
+    /* ══ STANDARD CALENDAR VIEW (Employees / Equipment) ══ */
+    React.createElement('div', { style:{ flex:1,overflow:'auto',padding:'12px',display:'flex',flexDirection:'column',gap:0 }},
+      /* Day headers */
+      React.createElement('div', {
+        style:{ display:'grid',gridTemplateColumns:'repeat(7, 1fr)',gap:1,background:'#e5e7eb',borderRadius:'10px 10px 0 0',overflow:'hidden',flexShrink:0 }
+      },
+        DAY_NAMES.map((d,i) => React.createElement('div', { key:d, style:{ padding:'8px 10px',background: i>=5 ? '#f1f5f9':'#fff',textAlign:'center',fontSize:13,fontWeight:700,color: i>=5 ? '#94a3b8':'#374151',textTransform:'uppercase',letterSpacing:'0.05em' }}, d))
+      ),
+      /* Week rows — projects span across days */
+      weeks.map((week, wi) => {
+        const { segments, numLanes } = getWeekSegments(week);
+        const totalRows = 1 + Math.max(numLanes, 1);
+        return React.createElement('div', {
+          key:wi,
+          style:{ display:'grid',gridTemplateColumns:'repeat(7, 1fr)',gridTemplateRows:`auto repeat(${Math.max(numLanes,1)}, auto)`,borderRadius: wi===numWeeks-1 ? '0 0 10px 10px':0,overflow:'hidden',flex:1,minHeight:0,borderTop:'1px solid #e5e7eb' }
+        },
+          [].concat(
+            /* Day background cells — span all rows */
+            week.map((date, di) => {
+              const ds=fmtDate(date), isToday=ds===today, isWeekend=di>=5;
+              return React.createElement('div', { key:'bg-'+ds, style:{ gridColumn:di+1,gridRow:`1 / ${totalRows+1}`,background:isToday?'#eff6ff':isWeekend?'#f8fafc':'#fff',borderRight:di<6?'1px solid #e5e7eb':'none',borderLeft:isToday?'3px solid #2563eb':'none' }});
+            }),
+            /* Date numbers — row 1 */
+            week.map((date, di) => {
+              const ds=fmtDate(date), isToday=ds===today;
+              return React.createElement('div', { key:'d-'+ds, style:{ gridColumn:di+1,gridRow:1,padding:'4px 5px',zIndex:1 }},
+                React.createElement('span', { style:{ fontSize:13,fontWeight:isToday?800:date.getDate()===1?700:600,background:isToday?'#2563eb':'transparent',color:isToday?'#fff':'#374151',borderRadius:isToday?12:0,padding:isToday?'1px 7px':0,lineHeight:1.5 }},
+                  date.getDate()===1 ? `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][date.getMonth()]} ${date.getDate()}` : date.getDate()
+                )
+              );
+            }),
+            /* Project spanning bars — rows 2+ */
+            segments.map(seg => {
+              const p=seg.project, fs=numWeeks<=2?10:9, nfs=numWeeks<=2?13:11;
+              return React.createElement('div', {
+                key:`p-${p.id}-${wi}`,
+                draggable:true,
+                onDragStart:e=>{dragRef.current=p.id;e.dataTransfer.effectAllowed='move';e.currentTarget.style.opacity='0.5';},
+                onDragEnd:e=>{dragRef.current=null;e.currentTarget.style.opacity='1';},
+                onDragOver:e=>{e.preventDefault();e.dataTransfer.dropEffect='move';},
+                onDrop:e=>{e.preventDefault();const fromId=dragRef.current;if(fromId!=null&&fromId!==p.id){setProjectOrder(prev=>{const arr=[...prev];const fi=arr.indexOf(fromId),ti=arr.indexOf(p.id);if(fi<0||ti<0)return prev;arr.splice(fi,1);arr.splice(ti,0,fromId);/* Save new order to Google Sheets */if(api.isConnected()){const orderMap={};arr.forEach((id,i)=>orderMap[id]=i);setSyncStatus('saving');api.updateProjectOrder(orderMap).then(()=>setSyncStatus('saved')).catch(()=>setSyncStatus('error'));}return arr;});}},
+                onClick:e=>{e.stopPropagation();setEditProject(p);setShowProjectModal(true);},
+                onContextMenu:e=>{e.preventDefault();e.stopPropagation();setQuickEdit({project:p,position:{x:e.clientX,y:e.clientY},field:viewMode});},
+                onMouseEnter:()=>setHoveredProject(p.id), onMouseLeave:()=>setHoveredProject(null),
+                style:{ gridColumn:`${seg.startCol+1} / ${seg.endCol+2}`,gridRow:seg.lane+2,background:p.color+'15',borderLeft:`3px solid ${p.color}`,borderRadius:`${seg.isStart?4:0}px ${seg.isEnd?4:0}px ${seg.isEnd?4:0}px ${seg.isStart?4:0}px`,padding:'3px 6px',margin:'1px 2px',cursor:'grab',transition:'opacity 0.1s',opacity:hoveredProject&&hoveredProject!==p.id?0.4:1,zIndex:1,overflow:'hidden',minWidth:0 }
+              },
+                React.createElement('div', { style:{ fontSize:nfs,fontWeight:700,color:p.color,lineHeight:1.3,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}, p.name),
+                React.createElement('div', { style:{ display:'flex',flexWrap:'wrap',gap:1,marginTop:1 }},
+                  viewMode === 'employees' ?
+                  p.employees.map((e,idx) => {
+                    const isOB = overbookedSet.has(e);
+                    return React.createElement('span', { key:e, title: isOB ? `OVERBOOKED: ${e} is assigned to multiple projects on the same day` : '', style:{ fontSize:fs,color:isOB?'#dc2626':'#64748b',fontWeight:isOB?700:400,lineHeight:1.3,whiteSpace:'nowrap',background:isOB?'#fef2f2':'transparent',padding:isOB?'0 3px':0,borderRadius:isOB?3:0,animation:isOB?'overbookPulse 1.5s infinite':'' }}, e+(idx<p.employees.length-1?',':''));
+                  })
+                  :
+                  (p.equipment||[]).map((e,idx) => {
+                    const isOB = overbookedEquipSet.has(e);
+                    return React.createElement('span', { key:e, title: isOB ? `OVERBOOKED: ${e} is assigned to multiple projects on the same day` : '', style:{ fontSize:fs,color:isOB?'#dc2626':'#ea580c',fontWeight:isOB?700:500,lineHeight:1.3,whiteSpace:'nowrap',background:isOB?'#fef2f2':'transparent',padding:isOB?'0 3px':0,borderRadius:isOB?3:0,animation:isOB?'overbookPulse 1.5s infinite':'' }}, e+(idx<(p.equipment||[]).length-1?',':''));
+                  })
+                ),
+                /* CC? checkboxes — one per day inside the project bar */
+                React.createElement('div', { style:{ display:'flex', gap:3, marginTop:2, flexWrap:'wrap', justifyContent:'flex-end' }},
+                  (() => {
+                    const ccDays = [];
+                    for (let ci = seg.startCol; ci <= seg.endCol; ci++) {
+                      const ds = fmtDate(week[ci]);
+                      const checked = (p.ccChecks && p.ccChecks[ds]) || false;
+                      const dayLabel = ['M','T','W','Th','F','Sa','Su'][ci];
+                      ccDays.push(React.createElement('label', {
+                        key:'cc-'+ds,
+                        onClick: e => e.stopPropagation(),
+                        onMouseDown: e => e.stopPropagation(),
+                        draggable: false,
+                        style:{ display:'flex', alignItems:'center', gap:1, cursor:'pointer', fontSize:8, fontWeight:600, lineHeight:1, padding:'1px 2px', borderRadius:2, background: checked ? p.color+'25' : 'transparent' },
+                        title: 'CC ' + dayLabel + ': ' + (checked ? 'Confirmed' : 'Not confirmed')
+                      },
+                        React.createElement('input', {
+                          type:'checkbox',
+                          checked: checked,
+                          onChange: e => { e.stopPropagation(); handleToggleCC(p.id, ds); },
+                          onClick: e => e.stopPropagation(),
+                          onMouseDown: e => e.stopPropagation(),
+                          draggable: false,
+                          style:{ width:9, height:9, cursor:'pointer', accentColor: p.color, margin:0 }
+                        }),
+                        React.createElement('span', { style:{ color: p.color, opacity: checked ? 1 : 0.5 }}, dayLabel)
+                      ));
+                    }
+                    return ccDays;
+                  })()
+                )
+              );
+            })
+          )
+        );
+      })
+    ),
+
+    /* ── Available Employees by Day ── */
+    React.createElement('div', {
+      style:{ flexShrink:0,borderTop:'2px solid #d1d5db',background:'#f9fafb' }
+    },
+      /* Toggle header */
+      React.createElement('div', {
+        onClick:()=>setShowAvailability(!showAvailability),
+        style:{ display:'flex',alignItems:'center',justifyContent:'space-between',padding:'8px 16px',cursor:'pointer',userSelect:'none' },
+        onMouseOver:e=>e.currentTarget.style.background='#f1f5f9',
+        onMouseOut:e=>e.currentTarget.style.background='transparent'
+      },
+        React.createElement('div', { style:{ display:'flex',alignItems:'center',gap:8 }},
+          React.createElement('span', { style:{ fontSize:14 }}, '\u{1F4CB}'),
+          React.createElement('span', { style:{ fontSize:13,fontWeight:700,color:'#334155' }}, 'Available Employees'),
+          React.createElement('span', { style:{ fontSize:11,fontWeight:500,color:'#94a3b8' }}, `(unassigned by day)`)
+        ),
+        React.createElement('span', { style:{ fontSize:12,color:'#94a3b8',fontWeight:600 }}, showAvailability ? '▼ Hide' : '▶ Show')
+      ),
+      /* Grid of available employees per day */
+      showAvailability && React.createElement('div', {
+        style:{ maxHeight:200,overflow:'auto',padding:'0 12px 10px' }
+      },
+        weeks.map((week, wi) =>
+          React.createElement('div', {
+            key:'avail-'+wi,
+            style:{ display:'grid',gridTemplateColumns:'repeat(7, 1fr)',gap:1,marginBottom: wi<weeks.length-1?1:0 }
+          },
+            week.map((date, di) => {
+              const ds = fmtDate(date);
+              const avail = availableByDay[ds] || [];
+              const isToday = ds === today;
+              const isWeekend = di >= 5;
+              return React.createElement('div', {
+                key:'av-'+ds,
+                style:{ padding:'4px 6px',background:isToday?'#eff6ff':isWeekend?'#f8fafc':'#fff',borderRight:di<6?'1px solid #e5e7eb':'none',borderBottom:'1px solid #e5e7eb',minHeight:28 }
+              },
+                wi === 0 && React.createElement('div', { style:{ fontSize:10,fontWeight:700,color:'#94a3b8',marginBottom:2,textTransform:'uppercase',letterSpacing:'0.05em' }},
+                  date.getDate()===1 ? `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][date.getMonth()]} ${date.getDate()}` : `${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][di]} ${date.getDate()}`
+                ),
+                wi > 0 && React.createElement('div', { style:{ fontSize:10,fontWeight:600,color:'#94a3b8',marginBottom:2 }},
+                  date.getDate()===1 ? `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][date.getMonth()]} ${date.getDate()}` : date.getDate()
+                ),
+                avail.length === 0
+                  ? React.createElement('div', { style:{ fontSize:10,color:'#d1d5db',fontStyle:'italic' }}, 'None')
+                  : React.createElement('div', { style:{ display:'flex',flexDirection:'column',gap:0 }},
+                      avail.map(emp =>
+                        React.createElement('div', { key:emp, style:{ fontSize:10,color:'#16a34a',fontWeight:500,lineHeight:1.5,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}, emp)
+                      )
+                    ),
+                avail.length > 0 && React.createElement('div', { style:{ fontSize:9,fontWeight:700,color:'#16a34a',marginTop:2,background:'#dcfce7',padding:'1px 4px',borderRadius:3,display:'inline-block' }}, `${avail.length} avail.`)
+              );
+            })
+          )
+        )
+      )
+    ),
+
+    /* ── TBD Project Queue ── */
+    React.createElement('div', {
+      style:{ flexShrink:0,borderTop:'2px solid #d1d5db',background:'#f9fafb' }
+    },
+      /* Toggle header */
+      React.createElement('div', {
+        onClick:()=>setShowTBDQueue(!showTBDQueue),
+        style:{ display:'flex',alignItems:'center',justifyContent:'space-between',padding:'8px 16px',cursor:'pointer',userSelect:'none' },
+        onMouseOver:e=>e.currentTarget.style.background='#f1f5f9',
+        onMouseOut:e=>e.currentTarget.style.background='transparent'
+      },
+        React.createElement('div', { style:{ display:'flex',alignItems:'center',gap:8,flexWrap:'wrap' }},
+          React.createElement('span', { style:{ fontSize:14 }}, '\u{1F4C2}'),
+          React.createElement('span', { style:{ fontSize:13,fontWeight:700,color:'#334155' }}, 'TBD Project Queue'),
+          React.createElement('span', { style:{ fontSize:11,fontWeight:500,color:'#94a3b8' }}, 'Awarded Jobs that are flexible or unknown start date')
+        ),
+        React.createElement('span', { style:{ fontSize:12,color:'#94a3b8',fontWeight:600 }}, showTBDQueue ? '▼ Hide' : '▶ Show')
+      ),
+      /* Queue content */
+      showTBDQueue && React.createElement('div', {
+        style:{ padding:'0 16px 12px' }
+      },
+        /* Add item row */
+        React.createElement('div', { style:{ display:'flex',gap:8,marginBottom:8 }},
+          React.createElement('input', {
+            type:'text',
+            value:newTBDItem,
+            onChange:e=>setNewTBDItem(e.target.value),
+            onKeyDown:e=>{ if(e.key==='Enter') handleAddTBDItem(); },
+            placeholder:'Add a project to the queue...',
+            style:{ flex:1,padding:'6px 10px',fontSize:12,border:'1px solid #d1d5db',borderRadius:6,outline:'none',background:'#fff' }
+          }),
+          React.createElement('button', {
+            onClick:handleAddTBDItem,
+            style:{ padding:'6px 14px',fontSize:12,fontWeight:600,color:'#fff',background:'#2563eb',border:'none',borderRadius:6,cursor:'pointer',whiteSpace:'nowrap' }
+          }, '+ Add')
+        ),
+        /* List of items */
+        tbdQueue.length === 0
+          ? React.createElement('div', { style:{ fontSize:12,color:'#94a3b8',fontStyle:'italic',padding:'4px 0' }}, 'No projects in queue')
+          : React.createElement('div', { style:{ display:'flex',flexDirection:'column',gap:4 }},
+              tbdQueue.map((item, i) =>
+                React.createElement('div', {
+                  key:i,
+                  style:{ display:'flex',alignItems:'center',justifyContent:'space-between',padding:'6px 10px',background:'#fff',border:'1px solid #e5e7eb',borderRadius:6,fontSize:12,color:'#334155' }
+                },
+                  React.createElement('span', { style:{ fontWeight:500 }}, item),
+                  React.createElement('button', {
+                    onClick:()=>handleRemoveTBDItem(i),
+                    title:'Remove from queue',
+                    style:{ background:'none',border:'none',cursor:'pointer',fontSize:14,color:'#94a3b8',padding:'0 4px',lineHeight:1 },
+                    onMouseOver:e=>e.currentTarget.style.color='#dc2626',
+                    onMouseOut:e=>e.currentTarget.style.color='#94a3b8'
+                  }, '×')
+                )
+              )
+            )
+      )
+    ),
+
+    /* ── Overbooking warnings ── */
+    (Object.keys(overbookedEmps).length > 0 || Object.keys(overbookedEquip).length > 0) && React.createElement('div', {
+      style:{ padding:'8px 16px',background:'#fef2f2',borderTop:'2px solid #fca5a5',display:'flex',alignItems:'flex-start',gap:10,flexShrink:0,overflow:'auto',maxHeight:140 }
+    },
+      React.createElement('span', { style:{ fontSize:16,lineHeight:1.3,flexShrink:0 }}, '\u26a0\ufe0f'),
+      React.createElement('div', { style:{ display:'flex',flexDirection:'column',gap:4,flex:1,minWidth:0 }},
+        Object.keys(overbookedEmps).length > 0 && React.createElement('div', {},
+          React.createElement('span', { style:{ fontSize:12,fontWeight:700,color:'#991b1b' }}, `Employee Overbooking \u2014 ${Object.keys(overbookedEmps).length} employee${Object.keys(overbookedEmps).length>1?'s':''}:`),
+          React.createElement('div', { style:{ display:'flex',flexWrap:'wrap',gap:4,marginTop:2 }},
+            Object.entries(overbookedEmps).map(([emp, conflicts]) =>
+              React.createElement('span', {
+                key:emp,
+                title: conflicts.map(c => `${c.date}: ${c.projects.join(' & ')}`).join('\n'),
+                style:{ fontSize:11,fontWeight:600,color:'#dc2626',background:'#fff',padding:'2px 8px',borderRadius:4,border:'1px solid #fca5a5',cursor:'help',whiteSpace:'nowrap' }
+              }, `${emp} (${conflicts.length} day${conflicts.length>1?'s':''})`)
+            )
+          )
+        ),
+        Object.keys(overbookedEquip).length > 0 && React.createElement('div', {},
+          React.createElement('span', { style:{ fontSize:12,fontWeight:700,color:'#9a3412' }}, `Equipment Overbooking \u2014 ${Object.keys(overbookedEquip).length} item${Object.keys(overbookedEquip).length>1?'s':''}:`),
+          React.createElement('div', { style:{ display:'flex',flexWrap:'wrap',gap:4,marginTop:2 }},
+            Object.entries(overbookedEquip).map(([eq, conflicts]) =>
+              React.createElement('span', {
+                key:eq,
+                title: conflicts.map(c => `${c.date}: ${c.projects.join(' & ')}`).join('\n'),
+                style:{ fontSize:11,fontWeight:600,color:'#ea580c',background:'#fff',padding:'2px 8px',borderRadius:4,border:'1px solid #fdba74',cursor:'help',whiteSpace:'nowrap' }
+              }, `${eq} (${conflicts.length} day${conflicts.length>1?'s':''})`)
+            )
+          )
+        )
+      )
+    ),
+
+    /* ── Modals ── */
+    React.createElement(ProjectFormModal, { open:showProjectModal, onClose:()=>{ setShowProjectModal(false); setEditProject(null); }, onSave:handleSaveProject, onDelete:handleDeleteProject, onSplit:handleSplitProject, project:editProject, allEmployees:employees, allEquipment:equipment, usedColors }),
+    React.createElement(CSVImportModal, { open:showImport, onClose:()=>setShowImport(false), onImport:handleImportProjects }),
+    React.createElement(ManageEmployeesModal, { open:showEmployees, onClose:()=>setShowEmployees(false), employees, onUpdate:handleUpdateEmployees }),
+    React.createElement(ManageEquipmentModal, { open:showEquipment, onClose:()=>setShowEquipment(false), equipment, onUpdate:handleUpdateEquipment }),
+    quickEdit && React.createElement(QuickEditPopup, { project:quickEdit.project, position:quickEdit.position, allItems:quickEdit.field==='equipment'?equipment:employees, field:quickEdit.field==='equipment'?'equipment':'employees', onUpdate:handleQuickUpdate, onClose:()=>setQuickEdit(null) }),
+    React.createElement(UserPickerModal, { open:showUserPicker, onSelect:selectUser, allUsers:PROJECT_MANAGERS }),
+    React.createElement(ActivityDashboard, { open:showDashboard, onClose:()=>setShowDashboard(false) }),
+
+    React.createElement('style', {}, `
+      @keyframes slideUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+      @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+      @keyframes overbookPulse { 0%,100% { box-shadow:0 0 2px #dc2626; } 50% { box-shadow:0 0 8px #dc2626; } }
+      ::-webkit-scrollbar { width:6px; height:6px; }
+      ::-webkit-scrollbar-track { background:transparent; }
+      ::-webkit-scrollbar-thumb { background:#d1d5db; border-radius:3px; }
+      ::-webkit-scrollbar-thumb:hover { background:#9ca3af; }
+      input:focus { border-color:#2563eb !important; box-shadow:0 0 0 3px rgba(37,99,235,0.1); }
+    `)
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+</script>
+</body>
+</html>
