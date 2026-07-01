@@ -148,6 +148,14 @@ const api = {
       body: JSON.stringify({ action: 'updateTBDQueue', items })
     });
     return res.json();
+  },
+
+  async updateRevertedQueue(items) {
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'updateRevertedQueue', items })
+    });
+    return res.json();
   }
 };
 
@@ -361,6 +369,8 @@ function ProjectFormModal({ open, onClose, onSave, onDelete, onSplit, project, a
   const [showEquipDrop, setShowEquipDrop] = useState(false);
   const [splitMode, setSplitMode] = useState(false);
   const [splitDate, setSplitDate] = useState('');
+  const [crewSizeEst, setCrewSizeEst] = useState('');
+  const [hubspotDealId, setHubspotDealId] = useState('');
 
   /* Can split if project spans more than 1 day */
   const canSplit = isEdit && startDate && endDate && startDate < endDate;
@@ -370,8 +380,8 @@ function ProjectFormModal({ open, onClose, onSave, onDelete, onSplit, project, a
 
   useEffect(() => {
     if (open) {
-      if (project) { setName(project.name); setStartDate(project.startDate); setEndDate(project.endDate); setColor(project.color); setEmps([...project.employees]); setEquips([...(project.equipment||[])]); }
-      else { setName(''); setStartDate(fmtDate(new Date())); setEndDate(fmtDate(new Date())); setColor(PROJECT_COLORS.find(c => !usedColors.includes(c)) || PROJECT_COLORS[0]); setEmps([]); setEquips([]); }
+      if (project) { setName(project.name); setStartDate(project.startDate); setEndDate(project.endDate); setColor(project.color); setEmps([...project.employees]); setEquips([...(project.equipment||[])]); setCrewSizeEst(project.crewSizeEst||''); setHubspotDealId(project.hubspotDealId||''); }
+      else { setName(''); setStartDate(fmtDate(new Date())); setEndDate(fmtDate(new Date())); setColor(PROJECT_COLORS.find(c => !usedColors.includes(c)) || PROJECT_COLORS[0]); setEmps([]); setEquips([]); setCrewSizeEst(''); setHubspotDealId(''); }
       setNewEmp(''); setNewEquip(''); setSplitMode(false); setSplitDate('');
     }
   }, [open, project]);
@@ -380,7 +390,7 @@ function ProjectFormModal({ open, onClose, onSave, onDelete, onSplit, project, a
   const availableEquip = allEquipment.filter(e => !equips.includes(e) && e.toLowerCase().includes(newEquip.toLowerCase()));
   function addEmp(n) { setEmps(prev => prev.includes(n) ? prev : [...prev, n]); setNewEmp(''); setShowDrop(false); }
   function addEquip(n) { setEquips(prev => prev.includes(n) ? prev : [...prev, n]); setNewEquip(''); setShowEquipDrop(false); }
-  function handleSave() { if (!name.trim()||!startDate||!endDate) return; onSave({ name:name.trim(), startDate, endDate, color, employees:emps, equipment:equips, id:project?.id }); onClose(); }
+  function handleSave() { if (!name.trim()||!startDate||!endDate) return; onSave({ name:name.trim(), startDate, endDate, color, employees:emps, equipment:equips, id:project?.id, crewSizeEst, hubspotDealId }); onClose(); }
 
   const inp = { padding:'8px 12px',borderRadius:8,border:'1px solid #d1d5db',fontSize:14,width:'100%',outline:'none' };
 
@@ -389,6 +399,16 @@ function ProjectFormModal({ open, onClose, onSave, onDelete, onSplit, project, a
       React.createElement('div', {},
         React.createElement('label', { style:{ fontSize:12,fontWeight:600,color:'#374151',marginBottom:4,display:'block' }}, 'Project Name'),
         React.createElement('input', { value:name, onChange:e=>setName(e.target.value), placeholder:'e.g. CSI/IN', style:inp })
+      ),
+      React.createElement('div', { style:{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:12 }},
+        React.createElement('div', {},
+          React.createElement('label', { style:{ fontSize:12,fontWeight:600,color:'#374151',marginBottom:4,display:'block' }}, 'Crew Size Est.'),
+          React.createElement('input', { type:'number', min:0, value:crewSizeEst, onChange:e=>setCrewSizeEst(e.target.value), placeholder:'e.g. 6', style:inp })
+        ),
+        React.createElement('div', {},
+          React.createElement('label', { style:{ fontSize:12,fontWeight:600,color:'#374151',marginBottom:4,display:'block' }}, 'HubSpot Deal ID'),
+          React.createElement('input', { value:hubspotDealId, onChange:e=>setHubspotDealId(e.target.value), placeholder:'optional', style:inp })
+        )
       ),
       React.createElement('div', { style:{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:12 }},
         React.createElement('div', {},
@@ -794,6 +814,8 @@ function App() {
   const [tbdQueue, setTBDQueue] = useState([]);
   const [showTBDQueue, setShowTBDQueue] = useState(true);
   const [newTBDItem, setNewTBDItem] = useState('');
+  const [revertedQueue, setRevertedQueue] = useState([]);
+  const [showRevertedQueue, setShowRevertedQueue] = useState(true);
 
   /* ── User identity (stored in localStorage) ── */
   const [currentUser, setCurrentUser] = useState(() => {
@@ -844,6 +866,7 @@ function App() {
             setEmployees((data.employees || []).filter(function(e){ return !PROJECT_MANAGERS.includes(e); }));
             setEquipment(data.equipment || []);
             setTBDQueue(data.tbdQueue || []);
+            setRevertedQueue(data.revertedQueue || []);
             setNextId(data.nextId);
             setSyncStatus('saved');
           } else {
@@ -886,6 +909,7 @@ function App() {
           setEmployees((data.employees || []).filter(function(e){ return !PROJECT_MANAGERS.includes(e); }));
           setEquipment(data.equipment || []);
           setTBDQueue(data.tbdQueue || []);
+            setRevertedQueue(data.revertedQueue || []);
           setNextId(data.nextId);
           setSyncStatus('saved');
         }
@@ -1222,6 +1246,50 @@ function App() {
     return `${mo[first.getMonth()]} ${first.getFullYear()} \u2013 ${mo[last.getMonth()]} ${last.getFullYear()}`;
   }, [days]);
 
+  function handleRemoveRevertedItem(hubspotDealId) {
+    const updated = revertedQueue.filter(function(r){ return r.hubspotDealId !== hubspotDealId; });
+    setRevertedQueue(updated);
+    api.updateRevertedQueue(updated);
+  }
+
+  function renderRevertedQueuePanel() {
+    return React.createElement('div', {
+      style: { flexShrink:0, borderTop:'2px solid #d1d5db', background:'#fff7ed' }
+    },
+      React.createElement('div', {
+        onClick: () => setShowRevertedQueue(!showRevertedQueue),
+        style: { display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 16px', cursor:'pointer', userSelect:'none' }
+      },
+        React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:8 } },
+          React.createElement('span', { style:{ fontSize:13, fontWeight:700, color:'#9a3412' } }, 'Reverted from PO Awarded'),
+          React.createElement('span', { style:{ fontSize:11, fontWeight:700, color:'#9a3412', background:'#ffedd5', padding:'1px 6px', borderRadius:10 } }, String(revertedQueue.length))
+        ),
+        React.createElement('span', { style:{ fontSize:11, color:'#9a3412' } }, showRevertedQueue ? '\u25b2' : '\u25bc')
+      ),
+      showRevertedQueue && React.createElement('div', {
+        style: { maxHeight:140, overflowY:'auto', padding:'0 16px 10px' }
+      },
+        revertedQueue.length === 0
+          ? React.createElement('div', { style:{ fontSize:12, color:'#9ca3af', fontStyle:'italic', padding:'4px 0' } }, 'No deals have dropped out of PO Awarded.')
+          : revertedQueue.map(function(r) {
+              return React.createElement('div', {
+                key: r.hubspotDealId,
+                style: { display:'flex', alignItems:'center', justifyContent:'space-between', padding:'6px 8px', marginBottom:4, background:'#fff', border:'1px solid #fed7aa', borderRadius:6, fontSize:12 }
+              },
+                React.createElement('div', {},
+                  React.createElement('div', { style:{ fontWeight:600 } }, r.name),
+                  React.createElement('div', { style:{ color:'#9ca3af', fontSize:11 } }, 'Now: ' + r.newStage + ' \u00b7 ' + r.revertedDate)
+                ),
+                React.createElement('button', {
+                  onClick: () => handleRemoveRevertedItem(r.hubspotDealId),
+                  style: { border:'none', background:'transparent', color:'#9ca3af', cursor:'pointer', fontSize:14, padding:'2px 6px' }
+                }, '\u00d7')
+              );
+            })
+      )
+    );
+  }
+
   if (loading) return React.createElement('div', { style:{ display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',fontSize:16,color:'#6b7280' }}, 'Loading Job Board...');
 
   /* ─── Render ─── */
@@ -1536,6 +1604,8 @@ function App() {
         )
       )
     ),
+
+    renderRevertedQueuePanel(),
 
     /* ── TBD Project Queue ── */
     React.createElement('div', {
