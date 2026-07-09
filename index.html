@@ -535,7 +535,7 @@ function ProjectFormModal({ open, onClose, onSave, onDelete, onSplit, project, a
 function ManageEmployeesModal({ open, onClose, employees, onUpdate }) {
   const [emps, setEmps] = useState([]);
   const [newName, setNewName] = useState('');
-  useEffect(() => { if (open) setEmps([...employees]); }, [open, employees]);
+  useEffect(() => { if (open) setEmps([...employees]); }, [open]);
   function addEmp() { const n=newName.trim(); if(n&&!emps.includes(n)){ setEmps([...emps,n]); setNewName(''); }}
   const inp = { padding:'8px 12px',borderRadius:8,border:'1px solid #d1d5db',fontSize:14,outline:'none',flex:1 };
 
@@ -560,7 +560,7 @@ function ManageEmployeesModal({ open, onClose, employees, onUpdate }) {
 function ManageEquipmentModal({ open, onClose, equipment, onUpdate }) {
   const [equips, setEquips] = useState([]);
   const [newName, setNewName] = useState('');
-  useEffect(() => { if (open) setEquips([...equipment]); }, [open, equipment]);
+  useEffect(() => { if (open) setEquips([...equipment]); }, [open]);
   function addEquip() { const n=newName.trim(); if(n&&!equips.includes(n)){ setEquips([...equips,n]); setNewName(''); }}
   const inp = { padding:'8px 12px',borderRadius:8,border:'1px solid #d1d5db',fontSize:14,outline:'none',flex:1 };
 
