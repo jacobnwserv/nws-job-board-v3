@@ -1025,6 +1025,7 @@ function App() {
     let id = nextId;
     const newPart1 = { ...part1, id: id };
     const newPart2 = { ...part2, id: id + 1 };
+    let part2ForEdit = newPart2;
     setProjects(prev => [...prev, newPart1, newPart2]);
     setNextId(id + 2);
 
@@ -1036,14 +1037,14 @@ function App() {
         const res1 = await api.createProject(part1);
         if (res1.id) setProjects(prev => prev.map(p => p.id === newPart1.id ? { ...p, id: res1.id } : p));
         const res2 = await api.createProject(part2);
-        if (res2.id) setProjects(prev => prev.map(p => p.id === newPart2.id ? { ...p, id: res2.id } : p));
+        if (res2.id) { part2ForEdit = { ...newPart2, id: res2.id }; setProjects(prev => prev.map(p => p.id === newPart2.id ? { ...p, id: res2.id } : p)); }
         setSyncStatus('saved');
       } catch { setSyncStatus('error'); }
     }
 
     /* Open Part 2 for editing so user can adjust the crew */
     setTimeout(() => {
-      setEditProject(newPart2);
+      setEditProject(part2ForEdit);
       setShowProjectModal(true);
     }, 300);
   }
@@ -1170,6 +1171,32 @@ function App() {
   }, [projects, days]);
 
   const overbookedSet = useMemo(() => new Set(Object.keys(overbookedEmps)), [overbookedEmps]);
+
+  const overbookedProjectPairs = useMemo(() => {
+    const empDayMap = {};
+    const visStart = days.length > 0 ? fmtDate(days[0]) : '';
+    const visEnd = days.length > 0 ? fmtDate(days[days.length - 1]) : '';
+    for (const p of projects) {
+      const start = parseDate(p.startDate), end = parseDate(p.endDate);
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate()+1)) {
+        const ds = fmtDate(d);
+        if (ds < visStart || ds > visEnd) continue;
+        for (const emp of p.employees) {
+          if (!empDayMap[emp]) empDayMap[emp] = {};
+          if (!empDayMap[emp][ds]) empDayMap[emp][ds] = [];
+          empDayMap[emp][ds].push(p.id);
+        }
+      }
+    }
+    const pairs = new Set();
+    for (const emp of Object.keys(empDayMap)) {
+      for (const ds of Object.keys(empDayMap[emp])) {
+        const ids = empDayMap[emp][ds];
+        if (ids.length > 1) ids.forEach(id => pairs.add(emp + '\u0000' + id));
+      }
+    }
+    return pairs;
+  }, [projects, days]);
 
   /* ── Equipment overbooking detection (visible weeks only) ── */
   const overbookedEquip = useMemo(() => {
@@ -1463,7 +1490,7 @@ function App() {
                 React.createElement('div', { style:{ display:'flex',flexWrap:'wrap',gap:1,marginTop:1 }},
                   viewMode === 'employees' ?
                   p.employees.map((e,idx) => {
-                    const isOB = overbookedSet.has(e);
+                    const isOB = overbookedProjectPairs.has(e + '\u0000' + p.id);
                     return React.createElement('span', { key:e, title: isOB ? `OVERBOOKED: ${e} is assigned to multiple projects on the same day` : '', style:{ fontSize:fs,color:isOB?'#dc2626':'#64748b',fontWeight:isOB?700:400,lineHeight:1.3,whiteSpace:'nowrap',background:isOB?'#fef2f2':'transparent',padding:isOB?'0 3px':0,borderRadius:isOB?3:0,animation:isOB?'overbookPulse 1.5s infinite':'' }}, e+(idx<p.employees.length-1?',':''));
                   })
                   :
