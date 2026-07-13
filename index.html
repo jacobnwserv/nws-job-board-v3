@@ -370,6 +370,7 @@ function ProjectFormModal({ open, onClose, onSave, onDelete, onSplit, project, a
   const [splitMode, setSplitMode] = useState(false);
   const [splitDate, setSplitDate] = useState('');
   const [crewSizeEst, setCrewSizeEst] = useState('');
+  const [tempsNeeded, setTempsNeeded] = useState('');
   const [hubspotDealId, setHubspotDealId] = useState('');
   const [equipmentNeeded, setEquipmentNeeded] = useState('');
 
@@ -381,8 +382,8 @@ function ProjectFormModal({ open, onClose, onSave, onDelete, onSplit, project, a
 
   useEffect(() => {
     if (open) {
-      if (project) { setName(project.name); setStartDate(project.startDate); setEndDate(project.endDate); setColor(project.color); setEmps([...project.employees]); setEquips([...(project.equipment||[])]); setCrewSizeEst(project.crewSizeEst||''); setHubspotDealId(project.hubspotDealId||''); setEquipmentNeeded(project.equipmentNeeded||''); }
-      else { setName(''); setStartDate(fmtDate(new Date())); setEndDate(fmtDate(new Date())); setColor(PROJECT_COLORS.find(c => !usedColors.includes(c)) || PROJECT_COLORS[0]); setEmps([]); setEquips([]); setCrewSizeEst(''); setHubspotDealId(''); }
+      if (project) { setName(project.name); setStartDate(project.startDate); setEndDate(project.endDate); setColor(project.color); setEmps([...project.employees]); setEquips([...(project.equipment||[])]); setCrewSizeEst(project.crewSizeEst||''); setTempsNeeded(project.tempsNeeded!=null?String(project.tempsNeeded):''); setHubspotDealId(project.hubspotDealId||''); setEquipmentNeeded(project.equipmentNeeded||''); }
+      else { setName(''); setStartDate(fmtDate(new Date())); setEndDate(fmtDate(new Date())); setColor(PROJECT_COLORS.find(c => !usedColors.includes(c)) || PROJECT_COLORS[0]); setEmps([]); setEquips([]); setCrewSizeEst(''); setTempsNeeded(''); setHubspotDealId(''); }
       setNewEmp(''); setNewEquip(''); setSplitMode(false); setSplitDate('');
     }
   }, [open, project]);
@@ -391,7 +392,7 @@ function ProjectFormModal({ open, onClose, onSave, onDelete, onSplit, project, a
   const availableEquip = allEquipment.filter(e => !equips.includes(e) && e.toLowerCase().includes(newEquip.toLowerCase()));
   function addEmp(n) { setEmps(prev => prev.includes(n) ? prev : [...prev, n]); setNewEmp(''); setShowDrop(false); }
   function addEquip(n) { setEquips(prev => prev.includes(n) ? prev : [...prev, n]); setNewEquip(''); setShowEquipDrop(false); }
-  function handleSave() { if (!name.trim()||!startDate||!endDate) return; onSave({ name:name.trim(), startDate, endDate, color, employees:emps, equipment:equips, id:project?.id, crewSizeEst, hubspotDealId, equipmentNeeded }); onClose(); }
+  function handleSave() { if (!name.trim()||!startDate||!endDate) return; onSave({ name:name.trim(), startDate, endDate, color, employees:emps, equipment:equips, id:project?.id, crewSizeEst, hubspotDealId, equipmentNeeded, tempsNeeded }); onClose(); }
 
   const inp = { padding:'8px 12px',borderRadius:8,border:'1px solid #d1d5db',fontSize:14,width:'100%',outline:'none' };
 
@@ -405,6 +406,10 @@ function ProjectFormModal({ open, onClose, onSave, onDelete, onSplit, project, a
         React.createElement('div', {},
           React.createElement('label', { style:{ fontSize:12,fontWeight:600,color:'#374151',marginBottom:4,display:'block' }}, 'Crew Size Est.'),
           React.createElement('input', { type:'number', min:0, value:crewSizeEst, onChange:e=>setCrewSizeEst(e.target.value), placeholder:'e.g. 6', style:inp })
+        ),
+        React.createElement('div', {},
+          React.createElement('label', { style:{ fontSize:12,fontWeight:600,color:'#374151',marginBottom:4,display:'block' }}, 'Temps Needed'),
+          React.createElement('input', { type:'number', min:0, value:tempsNeeded, onChange:e=>setTempsNeeded(e.target.value), placeholder:'e.g. 3', style:inp })
         ),
         React.createElement('div', {},
           React.createElement('label', { style:{ fontSize:12,fontWeight:600,color:'#374151',marginBottom:4,display:'block' }}, 'HubSpot Deal ID'),
@@ -1466,6 +1471,7 @@ function App() {
                     const isOB = overbookedEquipSet.has(e);
                     return React.createElement('span', { key:e, title: isOB ? `OVERBOOKED: ${e} is assigned to multiple projects on the same day` : '', style:{ fontSize:fs,color:isOB?'#dc2626':'#ea580c',fontWeight:isOB?700:500,lineHeight:1.3,whiteSpace:'nowrap',background:isOB?'#fef2f2':'transparent',padding:isOB?'0 3px':0,borderRadius:isOB?3:0,animation:isOB?'overbookPulse 1.5s infinite':'' }}, e+(idx<(p.equipment||[]).length-1?',':''));
                   })
+                  , (viewMode === 'employees' && Number(p.tempsNeeded) > 0 ? React.createElement('span', { key:'__tempsNeeded', style:{ fontSize:fs, color:'#7c3aed', fontWeight:600, fontStyle:'italic', whiteSpace:'nowrap', lineHeight:1.3, marginLeft: (p.employees && p.employees.length) ? 3 : 0 }}, '+' + p.tempsNeeded + ' temps') : null)
                 ),
                 /* CC? checkboxes — one per day inside the project bar */
                 React.createElement('div', { style:{ display:'flex', gap:3, marginTop:2, flexWrap:'wrap', justifyContent:'flex-end' }},
