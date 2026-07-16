@@ -156,6 +156,14 @@ const api = {
       body: JSON.stringify({ action: 'updateRevertedQueue', items })
     });
     return res.json();
+  },
+
+  async updateTimeOff(items) {
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'updateTimeOff', items })
+    });
+    return res.json();
   }
 };
 
@@ -591,6 +599,78 @@ function ManageEquipmentModal({ open, onClose, equipment, onUpdate }) {
   );
 }
 
+/* ─── Time Off Request Modal ─── */
+function TimeOffModal({ open, onClose, onSave, allEmployees, requests, onRemove }) {
+  const [employee, setEmployee] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+
+  useEffect(() => {
+    if (open) { setEmployee(''); setStartDate(fmtDate(new Date())); setEndDate(fmtDate(new Date())); }
+  }, [open]);
+
+  const valid = employee && startDate && endDate && endDate >= startDate;
+  const inp = { padding:'8px 12px',borderRadius:8,border:'1px solid #d1d5db',fontSize:14,width:'100%',outline:'none' };
+  const sorted = [...allEmployees].sort((a,b)=>a.localeCompare(b));
+  const upcoming = [...(requests||[])].sort((a,b)=>a.startDate.localeCompare(b.startDate));
+
+  function fmtRange(r) {
+    const opts = { month:'short', day:'numeric' };
+    const s = parseDate(r.startDate).toLocaleDateString('en-US', opts);
+    const e = parseDate(r.endDate).toLocaleDateString('en-US', opts);
+    return r.startDate === r.endDate ? s : `${s} – ${e}`;
+  }
+
+  return React.createElement(Modal, { open, onClose, title:'Request Time Off', width:440 },
+    React.createElement('div', { style:{ display:'flex',flexDirection:'column',gap:14 }},
+      React.createElement('div', {},
+        React.createElement('label', { style:{ fontSize:12,fontWeight:600,color:'#374151',marginBottom:4,display:'block' }}, 'Employee'),
+        React.createElement('select', {
+          value:employee, onChange:e=>setEmployee(e.target.value),
+          style:{ ...inp, background:'#fff', cursor:'pointer' }
+        },
+          React.createElement('option', { value:'' }, '-- Select employee --'),
+          sorted.map(e => React.createElement('option', { key:e, value:e }, e))
+        )
+      ),
+      React.createElement('div', { style:{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:12 }},
+        React.createElement('div', {},
+          React.createElement('label', { style:{ fontSize:12,fontWeight:600,color:'#374151',marginBottom:4,display:'block' }}, 'First Day Off'),
+          React.createElement('input', { type:'date', value:startDate, onChange:e=>{ setStartDate(e.target.value); if(e.target.value>endDate) setEndDate(e.target.value); }, style:inp })
+        ),
+        React.createElement('div', {},
+          React.createElement('label', { style:{ fontSize:12,fontWeight:600,color:'#374151',marginBottom:4,display:'block' }}, 'Last Day Off'),
+          React.createElement('input', { type:'date', value:endDate, onChange:e=>setEndDate(e.target.value), min:startDate, style:inp })
+        )
+      ),
+      React.createElement('div', { style:{ display:'flex',justifyContent:'flex-end',gap:8 }},
+        React.createElement('button', { onClick:onClose, style:{ padding:'10px 20px',borderRadius:8,border:'1px solid #d1d5db',background:'#fff',color:'#374151',fontWeight:600,fontSize:14,cursor:'pointer' }}, 'Cancel'),
+        React.createElement('button', {
+          onClick:()=>{ if (valid) { onSave({ employee, startDate, endDate }); onClose(); }},
+          disabled:!valid,
+          style:{ padding:'10px 20px',borderRadius:8,border:'none',background: valid ? '#0d9488':'#d1d5db',color:'#fff',fontWeight:600,fontSize:14,cursor: valid ? 'pointer':'not-allowed' }
+        }, 'Log Time Off')
+      ),
+      /* Existing requests */
+      upcoming.length > 0 && React.createElement('div', { style:{ borderTop:'1px solid #e5e7eb',paddingTop:12 }},
+        React.createElement('div', { style:{ fontSize:12,fontWeight:700,color:'#374151',marginBottom:6 }}, 'Logged Requests'),
+        React.createElement('div', { style:{ display:'flex',flexDirection:'column',gap:4,maxHeight:180,overflow:'auto' }},
+          upcoming.map(r =>
+            React.createElement('div', { key:r.id, style:{ display:'flex',alignItems:'center',justifyContent:'space-between',padding:'5px 10px',background:'#f0fdfa',border:'1px solid #ccfbf1',borderRadius:6,fontSize:12 }},
+              React.createElement('span', {}, React.createElement('strong', { style:{ color:'#134e4a' }}, r.employee), React.createElement('span', { style:{ color:'#0f766e' }}, ' — ' + fmtRange(r))),
+              React.createElement('button', {
+                onClick:()=>onRemove(r.id), title:'Remove request',
+                style:{ background:'none',border:'none',cursor:'pointer',fontSize:14,color:'#94a3b8',padding:'0 4px',lineHeight:1 },
+                onMouseOver:e=>e.currentTarget.style.color='#dc2626', onMouseOut:e=>e.currentTarget.style.color='#94a3b8'
+              }, '×')
+            )
+          )
+        )
+      )
+    )
+  );
+}
+
 /* ─── Quick Edit Popup (works for both employees and equipment) ─── */
 function QuickEditPopup({ project, position, allItems, field, onUpdate, onClose }) {
   const [search, setSearch] = useState('');
@@ -743,8 +823,8 @@ function ActivityDashboard({ open, onClose }) {
     style:{ padding:'6px 14px',borderRadius:6,border:'none',background:tab===id?'#fff':'transparent',boxShadow:tab===id?'0 1px 2px rgba(0,0,0,0.08)':'none',cursor:'pointer',fontSize:12,fontWeight:tab===id?700:500,color:tab===id?'#2563eb':'#6b7280' }
   }, label);
 
-  const actionIcons = { board_open:'📱', project_create:'➕', project_edit:'✏️', project_delete:'👑️', project_split:'✂️', cc_toggle:'☑️' };
-  const actionLabels = { board_open:'Opened board', project_create:'Created project', project_edit:'Edited project', project_delete:'Deleted project', project_split:'Split project', cc_toggle:'CC check' };
+  const actionIcons = { board_open:'📱', project_create:'➕', project_edit:'✏️', project_delete:'👑️', project_split:'✂️', cc_toggle:'☑️', timeoff_add:'🌴', timeoff_remove:'🗑️' };
+  const actionLabels = { board_open:'Opened board', project_create:'Created project', project_edit:'Edited project', project_delete:'Deleted project', project_split:'Split project', cc_toggle:'CC check', timeoff_add:'Logged time off', timeoff_remove:'Removed time off' };
 
   return React.createElement(Modal, { open, onClose, title:'Usage Dashboard', width:600 },
     React.createElement('div', { style:{ display:'flex',flexDirection:'column',gap:12 }},
@@ -824,6 +904,9 @@ function App() {
   const [tbdQueue, setTBDQueue] = useState([]);
   const [showTBDQueue, setShowTBDQueue] = useState(false);
   const [newTBDItem, setNewTBDItem] = useState('');
+  const [timeOffRequests, setTimeOffRequests] = useState([]);
+  const [showTimeOff, setShowTimeOff] = useState(false);
+  const [showTimeOffModal, setShowTimeOffModal] = useState(false);
 
   /* ── User identity (stored in localStorage) ── */
   const [currentUser, setCurrentUser] = useState(() => {
@@ -874,6 +957,7 @@ function App() {
             setEmployees((data.employees || []).filter(function(e){ return !PROJECT_MANAGERS.includes(e); }));
             setEquipment(data.equipment || []);
             setTBDQueue(data.tbdQueue || []);
+            setTimeOffRequests(data.timeOffRequests || []);
             setNextId(data.nextId);
             setSyncStatus('saved');
           } else {
@@ -916,6 +1000,7 @@ function App() {
           setEmployees((data.employees || []).filter(function(e){ return !PROJECT_MANAGERS.includes(e); }));
           setEquipment(data.equipment || []);
           setTBDQueue(data.tbdQueue || []);
+          setTimeOffRequests(data.timeOffRequests || []);
           setNextId(data.nextId);
           setSyncStatus('saved');
         }
@@ -1135,6 +1220,31 @@ function App() {
     logAction('tbd_remove', removed);
   }
 
+  /* ── Time Off handlers ── */
+  async function handleAddTimeOff(req) {
+    const newReq = { ...req, id: Date.now() };
+    const updated = [...timeOffRequests, newReq];
+    setTimeOffRequests(updated);
+    if (api.isConnected()) {
+      setSyncStatus('saving');
+      try { await api.updateTimeOff(updated); setSyncStatus('saved'); }
+      catch { setSyncStatus('error'); }
+    }
+    logAction('timeoff_add', `${req.employee}: ${req.startDate} to ${req.endDate}`);
+  }
+
+  async function handleRemoveTimeOff(id) {
+    const removed = timeOffRequests.find(r => r.id === id);
+    const updated = timeOffRequests.filter(r => r.id !== id);
+    setTimeOffRequests(updated);
+    if (api.isConnected()) {
+      setSyncStatus('saving');
+      try { await api.updateTimeOff(updated); setSyncStatus('saved'); }
+      catch { setSyncStatus('error'); }
+    }
+    if (removed) logAction('timeoff_remove', `${removed.employee}: ${removed.startDate} to ${removed.endDate}`);
+  }
+
   function navigateWeeks(n) { setBaseDate(addDays(baseDate, n*7)); }
   function goToToday() { setBaseDate(getMonday(new Date())); }
 
@@ -1246,6 +1356,36 @@ function App() {
     }
     return result;
   }, [days, projects, employees]);
+
+  /* ── Time off: requests per visible day + conflict detection ── */
+  const timeOffByDay = useMemo(() => {
+    const result = {};
+    for (const day of days) {
+      const ds = fmtDate(day);
+      result[ds] = timeOffRequests.filter(r => r.startDate <= ds && r.endDate >= ds);
+    }
+    return result;
+  }, [days, timeOffRequests]);
+
+  /* Employees assigned to a project on a day they requested off (visible weeks only) */
+  const timeOffConflicts = useMemo(() => {
+    const conflicts = {}; // { empName: [{ date, project }] }
+    const pairs = new Set(); // emp \0 projectId — for calendar highlighting
+    for (const day of days) {
+      const ds = fmtDate(day);
+      for (const r of timeOffRequests) {
+        if (r.startDate > ds || r.endDate < ds) continue;
+        for (const p of projects) {
+          if (p.startDate <= ds && p.endDate >= ds && p.employees.includes(r.employee)) {
+            if (!conflicts[r.employee]) conflicts[r.employee] = [];
+            conflicts[r.employee].push({ date: ds, project: p.name });
+            pairs.add(r.employee + '\u0000' + p.id);
+          }
+        }
+      }
+    }
+    return { conflicts, pairs };
+  }, [days, timeOffRequests, projects]);
 
   /* ── By Person view: for each assigned employee, map their projects per day ── */
   const byPersonData = useMemo(() => {
@@ -1367,11 +1507,19 @@ function App() {
             onMouseOver:e=>e.currentTarget.style.background='#f9fafb', onMouseOut:e=>e.currentTarget.style.background='#fff'
           }, 'Import CSV')
         ),
-        React.createElement('button', {
-          onClick:()=>{ setEditProject(null); setShowProjectModal(true); },
-          style:{ padding:'6px 12px',borderRadius:6,border:'none',background:'#2563eb',color:'#fff',fontWeight:600,fontSize:11,cursor:'pointer',boxShadow:'0 1px 3px rgba(37,99,235,0.3)' },
-          onMouseOver:e=>e.currentTarget.style.background='#1d4ed8', onMouseOut:e=>e.currentTarget.style.background='#2563eb'
-        }, '+ New Project')
+        React.createElement('div', { style:{ display:'flex',flexDirection:'column',gap:3 }},
+          React.createElement('button', {
+            onClick:()=>{ setEditProject(null); setShowProjectModal(true); },
+            style:{ padding:'6px 12px',borderRadius:6,border:'none',background:'#2563eb',color:'#fff',fontWeight:600,fontSize:11,cursor:'pointer',boxShadow:'0 1px 3px rgba(37,99,235,0.3)',whiteSpace:'nowrap' },
+            onMouseOver:e=>e.currentTarget.style.background='#1d4ed8', onMouseOut:e=>e.currentTarget.style.background='#2563eb'
+          }, '+ New Project'),
+          React.createElement('button', {
+            onClick:()=>setShowTimeOffModal(true),
+            style:{ padding:'6px 12px',borderRadius:6,border:'none',background:'#0d9488',color:'#fff',fontWeight:600,fontSize:11,cursor:'pointer',boxShadow:'0 1px 3px rgba(13,148,136,0.3)',whiteSpace:'nowrap' },
+            onMouseOver:e=>e.currentTarget.style.background='#0f766e', onMouseOut:e=>e.currentTarget.style.background='#0d9488',
+            title:'Log a requested time off for an employee'
+          }, '🌴 Time Off')
+        )
       )
     ),
 
@@ -1491,7 +1639,8 @@ function App() {
                   viewMode === 'employees' ?
                   p.employees.map((e,idx) => {
                     const isOB = overbookedProjectPairs.has(e + '\u0000' + p.id);
-                    return React.createElement('span', { key:e, title: isOB ? `OVERBOOKED: ${e} is assigned to multiple projects on the same day` : '', style:{ fontSize:fs,color:isOB?'#dc2626':'#64748b',fontWeight:isOB?700:400,lineHeight:1.3,whiteSpace:'nowrap',background:isOB?'#fef2f2':'transparent',padding:isOB?'0 3px':0,borderRadius:isOB?3:0,animation:isOB?'overbookPulse 1.5s infinite':'' }}, e+(idx<p.employees.length-1?',':''));
+                    const isTO = !isOB && timeOffConflicts.pairs.has(e + '\u0000' + p.id);
+                    return React.createElement('span', { key:e, title: isOB ? `OVERBOOKED: ${e} is assigned to multiple projects on the same day` : isTO ? `TIME OFF CONFLICT: ${e} requested time off during this project` : '', style:{ fontSize:fs,color:isOB?'#dc2626':isTO?'#b45309':'#64748b',fontWeight:(isOB||isTO)?700:400,lineHeight:1.3,whiteSpace:'nowrap',background:isOB?'#fef2f2':isTO?'#fef3c7':'transparent',padding:(isOB||isTO)?'0 3px':0,borderRadius:(isOB||isTO)?3:0,animation:isOB?'overbookPulse 1.5s infinite':'' }}, (isTO?'🌴 ':'')+e+(idx<p.employees.length-1?',':''));
                   })
                   :
                   (p.equipment||[]).map((e,idx) => {
@@ -1536,6 +1685,78 @@ function App() {
           )
         );
       })
+    ),
+
+    /* ── Requested Time Off by Day ── */
+    React.createElement('div', {
+      style:{ flexShrink:0,borderTop:'2px solid #d1d5db',background:'#f9fafb' }
+    },
+      /* Toggle header */
+      React.createElement('div', {
+        onClick:()=>setShowTimeOff(!showTimeOff),
+        style:{ display:'flex',alignItems:'center',justifyContent:'space-between',padding:'8px 16px',cursor:'pointer',userSelect:'none' },
+        onMouseOver:e=>e.currentTarget.style.background='#f1f5f9',
+        onMouseOut:e=>e.currentTarget.style.background='transparent'
+      },
+        React.createElement('div', { style:{ display:'flex',alignItems:'center',gap:8,flexWrap:'wrap' }},
+          React.createElement('span', { style:{ fontSize:14 }}, '🌴'),
+          React.createElement('span', { style:{ fontSize:13,fontWeight:700,color:'#334155' }}, 'Requested Time Off'),
+          React.createElement('span', { style:{ fontSize:11,fontWeight:500,color:'#94a3b8' }}, `(${timeOffRequests.length} request${timeOffRequests.length===1?'':'s'} logged)`),
+          Object.keys(timeOffConflicts.conflicts).length > 0 && React.createElement('span', {
+            style:{ fontSize:10,fontWeight:700,color:'#b45309',background:'#fef3c7',border:'1px solid #fde68a',padding:'1px 6px',borderRadius:4 }
+          }, `⚠️ ${Object.keys(timeOffConflicts.conflicts).length} scheduled during time off`)
+        ),
+        React.createElement('span', { style:{ fontSize:12,color:'#94a3b8',fontWeight:600 }}, showTimeOff ? '▼ Hide' : '▶ Show')
+      ),
+      /* Grid of time-off requests per day (aligned with calendar columns) */
+      showTimeOff && React.createElement('div', {
+        style:{ maxHeight:200,overflow:'auto',padding:'0 12px 10px' }
+      },
+        weeks.map((week, wi) =>
+          React.createElement('div', {
+            key:'to-'+wi,
+            style:{ display:'grid',gridTemplateColumns:'repeat(7, 1fr)',gap:1,marginBottom: wi<weeks.length-1?1:0 }
+          },
+            week.map((date, di) => {
+              const ds = fmtDate(date);
+              const offToday = timeOffByDay[ds] || [];
+              const isToday = ds === today;
+              const isWeekend = di >= 5;
+              return React.createElement('div', {
+                key:'to-'+ds,
+                style:{ padding:'4px 6px',background:isToday?'#eff6ff':isWeekend?'#f8fafc':'#fff',borderRight:di<6?'1px solid #e5e7eb':'none',borderBottom:'1px solid #e5e7eb',minHeight:28 }
+              },
+                wi === 0 && React.createElement('div', { style:{ fontSize:10,fontWeight:700,color:'#94a3b8',marginBottom:2,textTransform:'uppercase',letterSpacing:'0.05em' }},
+                  date.getDate()===1 ? `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][date.getMonth()]} ${date.getDate()}` : `${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][di]} ${date.getDate()}`
+                ),
+                wi > 0 && React.createElement('div', { style:{ fontSize:10,fontWeight:600,color:'#94a3b8',marginBottom:2 }},
+                  date.getDate()===1 ? `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][date.getMonth()]} ${date.getDate()}` : date.getDate()
+                ),
+                offToday.length === 0
+                  ? null
+                  : React.createElement('div', { style:{ display:'flex',flexDirection:'column',gap:1 }},
+                      offToday.map(r => {
+                        const hasConflict = timeOffConflicts.pairs.size > 0 && projects.some(p => p.startDate <= ds && p.endDate >= ds && p.employees.includes(r.employee));
+                        return React.createElement('div', {
+                          key:r.id,
+                          title: `${r.employee}: off ${r.startDate} to ${r.endDate}` + (hasConflict ? ' — ⚠️ ASSIGNED TO A PROJECT THIS DAY' : ''),
+                          style:{ display:'flex',alignItems:'center',justifyContent:'space-between',gap:2,fontSize:10,fontWeight:hasConflict?700:500,lineHeight:1.5,color:hasConflict?'#b45309':'#0d9488',background:hasConflict?'#fef3c7':'transparent',padding:hasConflict?'0 3px':0,borderRadius:hasConflict?3:0,whiteSpace:'nowrap',overflow:'hidden' }
+                        },
+                          React.createElement('span', { style:{ overflow:'hidden',textOverflow:'ellipsis' }}, (hasConflict?'⚠️ ':'') + r.employee),
+                          React.createElement('span', {
+                            onClick:e=>{ e.stopPropagation(); handleRemoveTimeOff(r.id); },
+                            title:'Remove this time off request',
+                            style:{ cursor:'pointer',fontWeight:700,color:'#94a3b8',flexShrink:0,padding:'0 2px' },
+                            onMouseOver:e=>e.currentTarget.style.color='#dc2626', onMouseOut:e=>e.currentTarget.style.color='#94a3b8'
+                          }, '×')
+                        );
+                      })
+                    )
+              );
+            })
+          )
+        )
+      )
     ),
 
     /* ── Available Employees by Day ── */
@@ -1656,7 +1877,7 @@ function App() {
     ),
 
     /* ── Overbooking warnings ── */
-    (Object.keys(overbookedEmps).length > 0 || Object.keys(overbookedEquip).length > 0) && React.createElement('div', {
+    (Object.keys(overbookedEmps).length > 0 || Object.keys(overbookedEquip).length > 0 || Object.keys(timeOffConflicts.conflicts).length > 0) && React.createElement('div', {
       style:{ padding:'8px 16px',background:'#fef2f2',borderTop:'2px solid #fca5a5',display:'flex',alignItems:'flex-start',gap:10,flexShrink:0,overflow:'auto',maxHeight:140 }
     },
       React.createElement('span', { style:{ fontSize:16,lineHeight:1.3,flexShrink:0 }}, '\u26a0\ufe0f'),
@@ -1684,6 +1905,18 @@ function App() {
               }, `${eq} (${conflicts.length} day${conflicts.length>1?'s':''})`)
             )
           )
+        ),
+        Object.keys(timeOffConflicts.conflicts).length > 0 && React.createElement('div', {},
+          React.createElement('span', { style:{ fontSize:12,fontWeight:700,color:'#92400e' }}, `Scheduled During Requested Time Off \u2014 ${Object.keys(timeOffConflicts.conflicts).length} employee${Object.keys(timeOffConflicts.conflicts).length>1?'s':''}:`),
+          React.createElement('div', { style:{ display:'flex',flexWrap:'wrap',gap:4,marginTop:2 }},
+            Object.entries(timeOffConflicts.conflicts).map(([emp, items]) =>
+              React.createElement('span', {
+                key:emp,
+                title: items.map(c => `${c.date}: ${c.project}`).join('\n'),
+                style:{ fontSize:11,fontWeight:600,color:'#b45309',background:'#fff',padding:'2px 8px',borderRadius:4,border:'1px solid #fde68a',cursor:'help',whiteSpace:'nowrap' }
+              }, `\ud83c\udf34 ${emp} (${items.length} day${items.length>1?'s':''})`)
+            )
+          )
         )
       )
     ),
@@ -1693,6 +1926,7 @@ function App() {
     React.createElement(CSVImportModal, { open:showImport, onClose:()=>setShowImport(false), onImport:handleImportProjects }),
     React.createElement(ManageEmployeesModal, { open:showEmployees, onClose:()=>setShowEmployees(false), employees, onUpdate:handleUpdateEmployees }),
     React.createElement(ManageEquipmentModal, { open:showEquipment, onClose:()=>setShowEquipment(false), equipment, onUpdate:handleUpdateEquipment }),
+    React.createElement(TimeOffModal, { open:showTimeOffModal, onClose:()=>setShowTimeOffModal(false), onSave:handleAddTimeOff, allEmployees:employees, requests:timeOffRequests, onRemove:handleRemoveTimeOff }),
     quickEdit && React.createElement(QuickEditPopup, { project:quickEdit.project, position:quickEdit.position, allItems:quickEdit.field==='equipment'?equipment:employees, field:quickEdit.field==='equipment'?'equipment':'employees', onUpdate:handleQuickUpdate, onClose:()=>setQuickEdit(null) }),
     React.createElement(UserPickerModal, { open:showUserPicker, onSelect:selectUser, allUsers:PROJECT_MANAGERS }),
     React.createElement(ActivityDashboard, { open:showDashboard, onClose:()=>setShowDashboard(false) }),
