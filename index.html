@@ -1352,10 +1352,12 @@ function App() {
           for (const emp of p.employees) assignedToday.add(emp);
         }
       }
-      result[ds] = employees.filter(emp => !assignedToday.has(emp));
+      /* Exclude employees with requested time off on this day */
+      const offToday = new Set(timeOffRequests.filter(r => r.startDate <= ds && r.endDate >= ds).map(r => r.employee));
+      result[ds] = employees.filter(emp => !assignedToday.has(emp) && !offToday.has(emp));
     }
     return result;
-  }, [days, projects, employees]);
+  }, [days, projects, employees, timeOffRequests]);
 
   /* ── Time off: requests per visible day + conflict detection ── */
   const timeOffByDay = useMemo(() => {
@@ -1648,6 +1650,11 @@ function App() {
                     return React.createElement('span', { key:e, title: isOB ? `OVERBOOKED: ${e} is assigned to multiple projects on the same day` : '', style:{ fontSize:fs,color:isOB?'#dc2626':'#ea580c',fontWeight:isOB?700:500,lineHeight:1.3,whiteSpace:'nowrap',background:isOB?'#fef2f2':'transparent',padding:isOB?'0 3px':0,borderRadius:isOB?3:0,animation:isOB?'overbookPulse 1.5s infinite':'' }}, e+(idx<(p.equipment||[]).length-1?',':''));
                   })
                   , (viewMode === 'employees' && Number(p.tempsNeeded) > 0 ? React.createElement('span', { key:'__tempsNeeded', style:{ fontSize:fs, color:'#7c3aed', fontWeight:600, fontStyle:'italic', whiteSpace:'nowrap', lineHeight:1.3, marginLeft: (p.employees && p.employees.length) ? 3 : 0 }}, '+' + p.tempsNeeded + ' temps') : null)
+                  /* Unstaffed project: show estimated needs in italics under the name */
+                  , (viewMode === 'employees' && p.employees.length === 0 && (p.crewSizeEst || p.equipmentNeeded) ? React.createElement('span', { key:'__estNeeds', style:{ fontSize:fs, color:'#64748b', fontStyle:'italic', lineHeight:1.3 }},
+                      [p.crewSizeEst ? 'Crew Est: ' + p.crewSizeEst : null, p.equipmentNeeded ? 'Equip: ' + p.equipmentNeeded : null].filter(Boolean).join(' • ')) : null)
+                  , (viewMode === 'equipment' && (p.equipment||[]).length === 0 && (p.equipmentNeeded || p.crewSizeEst) ? React.createElement('span', { key:'__equipNeeds', style:{ fontSize:fs, color:'#ea580c', fontStyle:'italic', lineHeight:1.3 }},
+                      [p.equipmentNeeded ? 'Needed: ' + p.equipmentNeeded : null, p.crewSizeEst ? 'Crew Est: ' + p.crewSizeEst : null].filter(Boolean).join(' • ')) : null)
                 ),
                 /* CC? checkboxes — one per day inside the project bar */
                 React.createElement('div', { style:{ display:'flex', gap:3, marginTop:2, flexWrap:'wrap', justifyContent:'flex-end' }},
