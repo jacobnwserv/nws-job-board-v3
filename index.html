@@ -1032,6 +1032,44 @@ function App() {
 
   function getProjectsForDay(date) { const ds=fmtDate(date); return projects.filter(p=>p.startDate<=ds&&p.endDate>=ds); }
 
+  /* ── Deterministic calendar arrangement ──
+     Priority: (1) projects with the same name stay in the same row (split parts, repeats),
+     (2) shorter durations toward the top, longer toward the bottom,
+     (3) group by PM color (subordinate to duration).
+     Lanes are assigned GLOBALLY across the visible weeks, so rows stay put week-to-week
+     and don't shift when unrelated changes are made. */
+  const globalLaneOf = useMemo(() => {
+    const visStart = days.length ? fmtDate(days[0]) : '';
+    const visEnd = days.length ? fmtDate(days[days.length - 1]) : '';
+    const vis = projects.filter(p => !(p.endDate < visStart || p.startDate > visEnd));
+    /* Same-name projects share a sort identity: the group's longest duration + earliest start */
+    const groupDur = {}, groupStart = {};
+    for (const p of vis) {
+      const dur = Math.round((parseDate(p.endDate) - parseDate(p.startDate)) / 86400000) + 1;
+      if (!(p.name in groupDur) || dur > groupDur[p.name]) groupDur[p.name] = dur;
+      if (!(p.name in groupStart) || p.startDate < groupStart[p.name]) groupStart[p.name] = p.startDate;
+    }
+    const colorIdx = c => { const i = PROJECT_COLORS.indexOf(c); return i < 0 ? 99 : i; };
+    const sorted = [...vis].sort((a, b) =>
+      (groupDur[a.name] - groupDur[b.name]) ||
+      (colorIdx(a.color) - colorIdx(b.color)) ||
+      a.name.localeCompare(b.name) ||
+      a.startDate.localeCompare(b.startDate) ||
+      (a.id - b.id)
+    );
+    /* First-fit lane packing over full date ranges → a project keeps one lane everywhere;
+       non-overlapping same-name parts are adjacent in the order, so they share a lane */
+    const lanes = []; const laneOf = {};
+    for (const p of sorted) {
+      let placed = false;
+      for (let i = 0; i < lanes.length; i++) {
+        if (lanes[i].every(q => q.endDate < p.startDate || q.startDate > p.endDate)) { lanes[i].push(p); laneOf[p.id] = i; placed = true; break; }
+      }
+      if (!placed) { laneOf[p.id] = lanes.length; lanes.push([p]); }
+    }
+    return laneOf;
+  }, [projects, days]);
+
   /* ── Compute spanning project segments for a week row ── */
   function getWeekSegments(weekDays) {
     const ws = fmtDate(weekDays[0]), we = fmtDate(weekDays[6]);
@@ -1044,20 +1082,11 @@ function App() {
       if (p.endDate < we) { for (let i=6;i>=0;i--) { if (fmtDate(weekDays[i])<=p.endDate){ec=i;break;} } }
       segs.push({ project:p, startCol:sc, endCol:Math.max(sc,ec), isStart:p.startDate>=ws, isEnd:p.endDate<=we });
     }
-    segs.sort((a,b)=>{
-      const ai = projectOrder.indexOf(a.project.id), bi = projectOrder.indexOf(b.project.id);
-      const oa = ai >= 0 ? ai : 9999, ob = bi >= 0 ? bi : 9999;
-      return oa - ob || a.startCol - b.startCol;
-    });
-    const lanes=[];
-    for (const s of segs) {
-      let placed=false;
-      for (let i=0;i<lanes.length;i++){
-        if(lanes[i].every(x=>x.endCol<s.startCol||x.startCol>s.endCol)){lanes[i].push(s);s.lane=i;placed=true;break;}
-      }
-      if(!placed){s.lane=lanes.length;lanes.push([s]);}
-    }
-    return { segments:segs, numLanes:lanes.length };
+    /* Use the globally-assigned lane so the row is identical in every week */
+    for (const s of segs) s.lane = globalLaneOf[s.project.id] != null ? globalLaneOf[s.project.id] : 0;
+    segs.sort((a, b) => a.lane - b.lane || a.startCol - b.startCol);
+    const numLanes = segs.length ? Math.max.apply(null, segs.map(s => s.lane)) + 1 : 0;
+    return { segments:segs, numLanes };
   }
 
   /* ── CRUD with Google Sheets sync ── */
@@ -1645,15 +1674,11 @@ function App() {
               const p=seg.project, fs=numWeeks<=2?10:9, nfs=numWeeks<=2?13:11;
               return React.createElement('div', {
                 key:`p-${p.id}-${wi}`,
-                draggable:true,
-                onDragStart:e=>{dragRef.current=p.id;e.dataTransfer.effectAllowed='move';e.currentTarget.style.opacity='0.5';},
-                onDragEnd:e=>{dragRef.current=null;e.currentTarget.style.opacity='1';},
-                onDragOver:e=>{e.preventDefault();e.dataTransfer.dropEffect='move';},
-                onDrop:e=>{e.preventDefault();const fromId=dragRef.current;if(fromId!=null&&fromId!==p.id){setProjectOrder(prev=>{const arr=[...prev];const fi=arr.indexOf(fromId),ti=arr.indexOf(p.id);if(fi<0||ti<0)return prev;arr.splice(fi,1);arr.splice(ti,0,fromId);/* Save new order to Google Sheets */if(api.isConnected()){const orderMap={};arr.forEach((id,i)=>orderMap[id]=i);setSyncStatus('saving');api.updateProjectOrder(orderMap).then(()=>setSyncStatus('saved')).catch(()=>setSyncStatus('error'));}return arr;});}},
+                /* Drag-reorder disabled — rows are auto-arranged (duration ↑, then PM color; same name = same row) */
                 onClick:e=>{e.stopPropagation();setEditProject(p);setShowProjectModal(true);},
                 onContextMenu:e=>{e.preventDefault();e.stopPropagation();setQuickEdit({project:p,position:{x:e.clientX,y:e.clientY},field:viewMode});},
                 onMouseEnter:()=>setHoveredProject(p.id), onMouseLeave:()=>setHoveredProject(null),
-                style:{ gridColumn:`${seg.startCol+1} / ${seg.endCol+2}`,gridRow:seg.lane+2,background:p.color+'15',borderLeft:`3px solid ${p.color}`,borderRadius:`${seg.isStart?4:0}px ${seg.isEnd?4:0}px ${seg.isEnd?4:0}px ${seg.isStart?4:0}px`,padding:'3px 6px',margin:'1px 2px',cursor:'grab',transition:'opacity 0.1s',opacity:hoveredProject&&hoveredProject!==p.id?0.4:1,zIndex:1,overflow:'hidden',minWidth:0 }
+                style:{ gridColumn:`${seg.startCol+1} / ${seg.endCol+2}`,gridRow:seg.lane+2,background:p.color+'15',borderLeft:`3px solid ${p.color}`,borderRadius:`${seg.isStart?4:0}px ${seg.isEnd?4:0}px ${seg.isEnd?4:0}px ${seg.isStart?4:0}px`,padding:'3px 6px',margin:'1px 2px',cursor:'pointer',transition:'opacity 0.1s',opacity:hoveredProject&&hoveredProject!==p.id?0.4:1,zIndex:1,overflow:'hidden',minWidth:0 }
               },
                 React.createElement('div', { style:{ fontSize:nfs,fontWeight:700,color:p.color,lineHeight:1.3,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}, p.name),
                 React.createElement('div', { style:{ display:'flex',flexWrap:'wrap',gap:1,marginTop:1 }},
