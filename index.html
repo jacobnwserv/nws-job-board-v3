@@ -1050,22 +1050,37 @@ function App() {
       if (!(p.name in groupStart) || p.startDate < groupStart[p.name]) groupStart[p.name] = p.startDate;
     }
     const colorIdx = c => { const i = PROJECT_COLORS.indexOf(c); return i < 0 ? 99 : i; };
-    const sorted = [...vis].sort((a, b) =>
+    /* Pack by NAME GROUP so same-name projects ALWAYS land in the same row (top priority).
+       A whole group claims one lane; the lane must be date-disjoint from every part of the group. */
+    const groupsMap = {};
+    for (const p of vis) { (groupsMap[p.name] = groupsMap[p.name] || []).push(p); }
+    const groups = Object.values(groupsMap).map(parts => {
+      parts.sort((a, b) => a.startDate.localeCompare(b.startDate) || (a.id - b.id));
+      /* Parts that overlap an earlier same-name part can't share its row — placed individually below */
+      const primary = []; const overflow = [];
+      for (const p of parts) {
+        if (primary.length === 0 || p.startDate > primary[primary.length - 1].endDate) primary.push(p);
+        else overflow.push(p);
+      }
+      return { name: parts[0].name, color: parts[0].color, primary, overflow };
+    });
+    groups.sort((a, b) =>
       (groupDur[a.name] - groupDur[b.name]) ||
       (colorIdx(a.color) - colorIdx(b.color)) ||
-      a.name.localeCompare(b.name) ||
-      a.startDate.localeCompare(b.startDate) ||
-      (a.id - b.id)
+      a.name.localeCompare(b.name)
     );
-    /* First-fit lane packing over full date ranges → a project keeps one lane everywhere;
-       non-overlapping same-name parts are adjacent in the order, so they share a lane */
     const lanes = []; const laneOf = {};
-    for (const p of sorted) {
-      let placed = false;
+    const disjoint = (lane, p) => lane.every(q => q.endDate < p.startDate || q.startDate > p.endDate);
+    const placeSet = (parts) => {
       for (let i = 0; i < lanes.length; i++) {
-        if (lanes[i].every(q => q.endDate < p.startDate || q.startDate > p.endDate)) { lanes[i].push(p); laneOf[p.id] = i; placed = true; break; }
+        if (parts.every(p => disjoint(lanes[i], p))) { parts.forEach(p => { lanes[i].push(p); laneOf[p.id] = i; }); return; }
       }
-      if (!placed) { laneOf[p.id] = lanes.length; lanes.push([p]); }
+      const i = lanes.length; lanes.push([]);
+      parts.forEach(p => { lanes[i].push(p); laneOf[p.id] = i; });
+    };
+    for (const g of groups) {
+      placeSet(g.primary);
+      for (const p of g.overflow) placeSet([p]);
     }
     return laneOf;
   }, [projects, days]);
