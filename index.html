@@ -893,6 +893,17 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [syncStatus, setSyncStatus] = useState(api.isConnected() ? 'saving' : 'offline');
 
+  /* ── Guards against the 30s auto-refresh clobbering local edits ──
+     syncStatusRef mirrors syncStatus for use inside the interval closure;
+     lastLocalChangeRef records when a local save started/finished so any
+     refresh response fetched BEFORE that moment is discarded as stale. */
+  const syncStatusRef = useRef(syncStatus);
+  const lastLocalChangeRef = useRef(0);
+  useEffect(() => {
+    syncStatusRef.current = syncStatus;
+    if (syncStatus === 'saving' || syncStatus === 'saved' || syncStatus === 'error') lastLocalChangeRef.current = Date.now();
+  }, [syncStatus]);
+
   const [baseDate, setBaseDate] = useState(getMonday(new Date()));
   const [numWeeks, setNumWeeks] = useState(1);
   const [showProjectModal, setShowProjectModal] = useState(false);
@@ -991,8 +1002,14 @@ function App() {
   useEffect(() => {
     if (!api.isConnected()) return;
     const interval = setInterval(async () => {
+      /* Don't fetch while a save is in flight — the server may not have the change yet */
+      if (syncStatusRef.current === 'saving') return;
+      const fetchStart = Date.now();
       try {
         const data = await api.getAll();
+        /* Discard stale responses: a save started or finished after this fetch began,
+           so this snapshot may not include the user's latest change */
+        if (syncStatusRef.current === 'saving' || lastLocalChangeRef.current > fetchStart) return;
         if (data.success) {
           const sorted = [...data.projects].sort((a,b) => (a.sortOrder||0) - (b.sortOrder||0));
           setProjects(sorted);
@@ -1100,8 +1117,10 @@ function App() {
     const cc = project.ccChecks || {};
     const cc1 = {}, cc2 = {};
     for (const [d,v] of Object.entries(cc)) { if (d <= dayBefore) cc1[d]=v; else cc2[d]=v; }
-    const part1 = { name: project.name, startDate: project.startDate, endDate: dayBefore, color: project.color, employees: [...project.employees], equipment: [...(project.equipment||[])], ccChecks: cc1 };
-    const part2 = { name: project.name, startDate: splitDateStr, endDate: project.endDate, color: project.color, employees: [...project.employees], equipment: [...(project.equipment||[])], ccChecks: cc2 };
+    /* Carry over estimate/meta fields so they follow both segments of the split */
+    const carry = { crewSizeEst: project.crewSizeEst, hubspotDealId: project.hubspotDealId, equipmentNeeded: project.equipmentNeeded, tempsNeeded: project.tempsNeeded };
+    const part1 = { name: project.name, startDate: project.startDate, endDate: dayBefore, color: project.color, employees: [...project.employees], equipment: [...(project.equipment||[])], ccChecks: cc1, ...carry };
+    const part2 = { name: project.name, startDate: splitDateStr, endDate: project.endDate, color: project.color, employees: [...project.employees], equipment: [...(project.equipment||[])], ccChecks: cc2, ...carry };
 
     /* Remove original project */
     setProjects(prev => prev.filter(p => p.id !== project.id));
