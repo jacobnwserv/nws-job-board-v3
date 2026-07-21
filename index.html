@@ -1197,24 +1197,6 @@ function App() {
     }, 300);
   }
 
-  /* ── Toggle CC (CompanyCam) check for a project on a specific day ── */
-  async function handleToggleCC(projectId, dateStr) {
-    const ccProject = projects.find(p => p.id === projectId);
-    logAction('cc_toggle', (ccProject?.name || '') + ' on ' + dateStr);
-    let updatedProject;
-    setProjects(prev => prev.map(p => {
-      if (p.id !== projectId) return p;
-      const ccChecks = { ...(p.ccChecks || {}), [dateStr]: !(p.ccChecks && p.ccChecks[dateStr]) };
-      updatedProject = { ...p, ccChecks };
-      return updatedProject;
-    }));
-    if (api.isConnected() && updatedProject) {
-      setSyncStatus('saving');
-      try { await api.updateProject(updatedProject); setSyncStatus('saved'); }
-      catch { setSyncStatus('error'); }
-    }
-  }
-
   async function handleImportProjects(imported) {
     let id = nextId;
     const newProjects = imported.map(p => ({ ...p, id: id++, color: PROJECT_COLORS[(id-1)%PROJECT_COLORS.length] }));
@@ -1709,37 +1691,6 @@ function App() {
                     return React.createElement('span', { key:e, title: isOB ? `OVERBOOKED: ${e} is assigned to multiple projects on the same day` : '', style:{ fontSize:fs,color:isOB?'#dc2626':'#ea580c',fontWeight:isOB?700:500,lineHeight:1.3,whiteSpace:'nowrap',background:isOB?'#fef2f2':'transparent',padding:isOB?'0 3px':0,borderRadius:isOB?3:0,animation:isOB?'overbookPulse 1.5s infinite':'' }}, e+(idx<(p.equipment||[]).length-1?',':''));
                   })
                   , (viewMode === 'employees' && Number(p.tempsNeeded) > 0 ? React.createElement('span', { key:'__tempsNeeded', style:{ fontSize:fs, color:'#7c3aed', fontWeight:600, fontStyle:'italic', whiteSpace:'nowrap', lineHeight:1.3, marginLeft: (p.employees && p.employees.length) ? 3 : 0 }}, '+' + p.tempsNeeded + ' temps') : null)
-                ),
-                /* CC? checkboxes — one per day inside the project bar */
-                React.createElement('div', { style:{ display:'flex', gap:3, marginTop:2, flexWrap:'wrap', justifyContent:'flex-end' }},
-                  (() => {
-                    const ccDays = [];
-                    for (let ci = seg.startCol; ci <= seg.endCol; ci++) {
-                      const ds = fmtDate(week[ci]);
-                      const checked = (p.ccChecks && p.ccChecks[ds]) || false;
-                      const dayLabel = ['M','T','W','Th','F','Sa','Su'][ci];
-                      ccDays.push(React.createElement('label', {
-                        key:'cc-'+ds,
-                        onClick: e => e.stopPropagation(),
-                        onMouseDown: e => e.stopPropagation(),
-                        draggable: false,
-                        style:{ display:'flex', alignItems:'center', gap:1, cursor:'pointer', fontSize:8, fontWeight:600, lineHeight:1, padding:'1px 2px', borderRadius:2, background: checked ? p.color+'25' : 'transparent' },
-                        title: 'CC ' + dayLabel + ': ' + (checked ? 'Confirmed' : 'Not confirmed')
-                      },
-                        React.createElement('input', {
-                          type:'checkbox',
-                          checked: checked,
-                          onChange: e => { e.stopPropagation(); handleToggleCC(p.id, ds); },
-                          onClick: e => e.stopPropagation(),
-                          onMouseDown: e => e.stopPropagation(),
-                          draggable: false,
-                          style:{ width:9, height:9, cursor:'pointer', accentColor: p.color, margin:0 }
-                        }),
-                        React.createElement('span', { style:{ color: p.color, opacity: checked ? 1 : 0.5 }}, dayLabel)
-                      ));
-                    }
-                    return ccDays;
-                  })()
                 ),
                 /* Estimated needs — bottom of bar, only on unstaffed projects */
                 (viewMode === 'employees' && p.employees.length === 0 && (p.crewSizeEst || p.equipmentNeeded) ? React.createElement('div', {
