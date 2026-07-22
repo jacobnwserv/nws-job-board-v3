@@ -18,14 +18,14 @@
 <script type="text/babel">
 const { useState, useRef, useEffect, useMemo, useCallback } = React;
 
-/* âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-   CONFIGURATION â Paste your Google Apps Script Web App URL here
-   âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ */
+/* ═══════════════════════════════════════════════════════════════
+   CONFIGURATION — Paste your Google Apps Script Web App URL here
+   ═══════════════════════════════════════════════════════════════ */
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbziHs839slKbF4iV7CUaCi0xteyQqBSeHpsX0UUHb8GdXCzwCocn3qqxIjHLupRFbf0OQ/exec';
 const NWS_LOGO = 'data:image/png;base64,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';
 /* If left empty, the app runs in local/demo mode with sample data */
 
-/* âââ Color palette for projects âââ */
+/* ─── Color palette for projects ─── */
 const PROJECT_COLORS = [
   '#2563eb','#16a34a','#ca8a04','#dc2626','#db2777','#ea580c','#9333ea','#92400e','#6b7280'
 ];
@@ -34,7 +34,7 @@ const COLOR_NAMES = {
   '#db2777':'Kent','#ea580c':'Jacob','#9333ea':'JB','#92400e':'Tentative','#6b7280':'Unassigned'
 };
 
-/* âââ Date helpers âââ */
+/* ─── Date helpers ─── */
 function getMonday(d) {
   const date = new Date(d);
   const day = date.getDay();
@@ -61,10 +61,10 @@ function parseDate(s) {
 
 const DAY_NAMES = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
 
-// Project Managers â listed only in the Activity Tracking user picker; excluded from the Employees roster
+// Project Managers — listed only in the Activity Tracking user picker; excluded from the Employees roster
 const PROJECT_MANAGERS = ['JD Steer','Cooper Steer','Jacob Huff','Hunter Brewer','Mike Cook','JB Boyle'];
 
-/* âââ Google Sheets API layer âââ */
+/* ─── Google Sheets API layer ─── */
 const api = {
   isConnected() { return !!APPS_SCRIPT_URL; },
 
@@ -135,7 +135,7 @@ const api = {
         method: 'POST',
         body: JSON.stringify({ action: 'logActivity', data: entry })
       });
-    } catch {} /* fire-and-forget â don't block the UI */
+    } catch {} /* fire-and-forget — don't block the UI */
   },
 
   async getActivity() {
@@ -168,7 +168,7 @@ const api = {
   }
 };
 
-/* âââ Demo data (used when no Google Sheet is connected) âââ */
+/* ─── Demo data (used when no Google Sheet is connected) ─── */
 function getDemoData() {
   return {
     employees: [
@@ -205,7 +205,7 @@ function getDemoData() {
   };
 }
 
-/* âââ Modal Component âââ */
+/* ─── Modal Component ─── */
 function Modal({ open, onClose, title, children, width }) {
   if (!open) return null;
   return React.createElement('div', {
@@ -231,7 +231,7 @@ function Modal({ open, onClose, title, children, width }) {
   );
 }
 
-/* âââ Chip for employee names âââ */
+/* ─── Chip for employee names ─── */
 function EmployeeChip({ name, removable, onRemove, color }) {
   return React.createElement('span', {
     style: { display:'inline-flex',alignItems:'center',gap:4,padding:'2px 8px',borderRadius:4,fontSize:12,fontWeight:500,background: color ? color+'18' : '#e5e7eb',color: color || '#374151',whiteSpace:'nowrap',lineHeight:1.4 }
@@ -246,12 +246,12 @@ function EmployeeChip({ name, removable, onRemove, color }) {
   );
 }
 
-/* âââ Saving indicator âââ */
+/* ─── Saving indicator ─── */
 function SyncBadge({ status }) {
   const styles = {
     saved: { bg:'#dcfce7', color:'#16a34a', text:'Saved to Google Sheets' },
     saving: { bg:'#fef9c3', color:'#ca8a04', text:'Saving...' },
-    error: { bg:'#fee2e2', color:'#dc2626', text:'Save failed â retrying' },
+    error: { bg:'#fee2e2', color:'#dc2626', text:'Save failed — retrying' },
     offline: { bg:'#f3f4f6', color:'#6b7280', text:'Local mode (no Google Sheet)' }
   };
   const s = styles[status] || styles.offline;
@@ -263,7 +263,7 @@ function SyncBadge({ status }) {
   );
 }
 
-/* âââ CSV Import Modal âââ */
+/* ─── CSV Import Modal ─── */
 function CSVImportModal({ open, onClose, onImport }) {
   const [preview, setPreview] = useState(null);
   const [mapping, setMapping] = useState({});
@@ -363,7 +363,7 @@ function CSVImportModal({ open, onClose, onImport }) {
   );
 }
 
-/* âââ Project Form Modal âââ */
+/* ─── Project Form Modal ─── */
 function ProjectFormModal({ open, onClose, onSave, onDelete, onSplit, project, allEmployees, allEquipment, usedColors }) {
   const isEdit = !!project;
   const [name, setName] = useState('');
@@ -492,7 +492,7 @@ function ProjectFormModal({ open, onClose, onSave, onDelete, onSplit, project, a
           )
         )
       ),
-      /* ââ Split Job Section ââ */
+      /* ── Split Job Section ── */
       canSplit && React.createElement('div', { style:{ borderTop:'1px solid #e5e7eb',paddingTop:12 }},
         !splitMode
           ? React.createElement('button', {
@@ -500,14 +500,14 @@ function ProjectFormModal({ open, onClose, onSave, onDelete, onSplit, project, a
               style:{ display:'flex',alignItems:'center',gap:6,padding:'8px 14px',borderRadius:8,border:'1px solid #d1d5db',background:'#fff',color:'#374151',fontWeight:600,fontSize:13,cursor:'pointer',width:'100%',justifyContent:'center' },
               onMouseOver:e=>e.currentTarget.style.background='#f9fafb', onMouseOut:e=>e.currentTarget.style.background='#fff'
             },
-              React.createElement('span', { style:{ fontSize:16 }}, 'âï¸'),
+              React.createElement('span', { style:{ fontSize:16 }}, '✂️'),
               'Split Job at a Date'
             )
           : React.createElement('div', { style:{ background:'#fffbeb',border:'1px solid #fde68a',borderRadius:8,padding:12 }},
               React.createElement('div', { style:{ display:'flex',alignItems:'center',gap:6,marginBottom:8 }},
-                React.createElement('span', { style:{ fontSize:14 }}, 'âï¸'),
+                React.createElement('span', { style:{ fontSize:14 }}, '✂️'),
                 React.createElement('span', { style:{ fontSize:13,fontWeight:700,color:'#92400e' }}, 'Split Job'),
-                React.createElement('span', { style:{ fontSize:12,color:'#b45309' }}, 'â choose the date where Part 2 begins')
+                React.createElement('span', { style:{ fontSize:12,color:'#b45309' }}, '— choose the date where Part 2 begins')
               ),
               React.createElement('div', { style:{ display:'flex',alignItems:'center',gap:8,marginBottom:10 }},
                 React.createElement('div', { style:{ flex:1 }},
@@ -516,8 +516,8 @@ function ProjectFormModal({ open, onClose, onSave, onDelete, onSplit, project, a
                 )
               ),
               splitDate && React.createElement('div', { style:{ fontSize:12,color:'#78350f',marginBottom:10,lineHeight:1.5,background:'#fef3c7',padding:'8px 10px',borderRadius:6 }},
-                React.createElement('div', {}, React.createElement('strong', {}, 'Part 1: '), `${startDate} to ${fmtDate(addDays(new Date(splitDate+'T00:00:00'), -1))} â same crew`),
-                React.createElement('div', {}, React.createElement('strong', {}, 'Part 2: '), `${splitDate} to ${endDate} â edit crew after split`)
+                React.createElement('div', {}, React.createElement('strong', {}, 'Part 1: '), `${startDate} to ${fmtDate(addDays(new Date(splitDate+'T00:00:00'), -1))} — same crew`),
+                React.createElement('div', {}, React.createElement('strong', {}, 'Part 2: '), `${splitDate} to ${endDate} — edit crew after split`)
               ),
               React.createElement('div', { style:{ display:'flex',gap:8,justifyContent:'flex-end' }},
                 React.createElement('button', {
@@ -528,7 +528,7 @@ function ProjectFormModal({ open, onClose, onSave, onDelete, onSplit, project, a
                   onClick:()=>{ if(splitDate>=splitMin && splitDate<=splitMax) { onSplit(project, splitDate); onClose(); }},
                   disabled:!splitDate || splitDate<splitMin || splitDate>splitMax,
                   style:{ padding:'7px 14px',borderRadius:6,border:'none',background: splitDate&&splitDate>=splitMin&&splitDate<=splitMax ? '#d97706':'#d1d5db',color:'#fff',fontWeight:600,fontSize:12,cursor: splitDate&&splitDate>=splitMin&&splitDate<=splitMax ? 'pointer':'not-allowed' }
-                }, 'âï¸ Confirm Split')
+                }, '✂️ Confirm Split')
               )
             )
       ),
@@ -550,7 +550,7 @@ function ProjectFormModal({ open, onClose, onSave, onDelete, onSplit, project, a
   );
 }
 
-/* âââ Manage Employees Modal âââ */
+/* ─── Manage Employees Modal ─── */
 function ManageEmployeesModal({ open, onClose, employees, onUpdate }) {
   const [emps, setEmps] = useState([]);
   const [newName, setNewName] = useState('');
@@ -575,7 +575,7 @@ function ManageEmployeesModal({ open, onClose, employees, onUpdate }) {
   );
 }
 
-/* âââ Manage Equipment Modal âââ */
+/* ─── Manage Equipment Modal ─── */
 function ManageEquipmentModal({ open, onClose, equipment, onUpdate }) {
   const [equips, setEquips] = useState([]);
   const [newName, setNewName] = useState('');
@@ -600,7 +600,7 @@ function ManageEquipmentModal({ open, onClose, equipment, onUpdate }) {
   );
 }
 
-/* âââ Time Off Request Modal âââ */
+/* ─── Time Off Request Modal ─── */
 function TimeOffModal({ open, onClose, onSave, allEmployees, requests, onRemove }) {
   const [employee, setEmployee] = useState('');
   const [startDate, setStartDate] = useState('');
@@ -619,7 +619,7 @@ function TimeOffModal({ open, onClose, onSave, allEmployees, requests, onRemove 
     const opts = { month:'short', day:'numeric' };
     const s = parseDate(r.startDate).toLocaleDateString('en-US', opts);
     const e = parseDate(r.endDate).toLocaleDateString('en-US', opts);
-    return r.startDate === r.endDate ? s : `${s} â ${e}`;
+    return r.startDate === r.endDate ? s : `${s} – ${e}`;
   }
 
   return React.createElement(Modal, { open, onClose, title:'Request Time Off', width:440 },
@@ -658,12 +658,12 @@ function TimeOffModal({ open, onClose, onSave, allEmployees, requests, onRemove 
         React.createElement('div', { style:{ display:'flex',flexDirection:'column',gap:4,maxHeight:180,overflow:'auto' }},
           upcoming.map(r =>
             React.createElement('div', { key:r.id, style:{ display:'flex',alignItems:'center',justifyContent:'space-between',padding:'5px 10px',background:'#f0fdfa',border:'1px solid #ccfbf1',borderRadius:6,fontSize:12 }},
-              React.createElement('span', {}, React.createElement('strong', { style:{ color:'#134e4a' }}, r.employee), React.createElement('span', { style:{ color:'#0f766e' }}, ' â ' + fmtRange(r))),
+              React.createElement('span', {}, React.createElement('strong', { style:{ color:'#134e4a' }}, r.employee), React.createElement('span', { style:{ color:'#0f766e' }}, ' — ' + fmtRange(r))),
               React.createElement('button', {
                 onClick:()=>onRemove(r.id), title:'Remove request',
                 style:{ background:'none',border:'none',cursor:'pointer',fontSize:14,color:'#94a3b8',padding:'0 4px',lineHeight:1 },
                 onMouseOver:e=>e.currentTarget.style.color='#dc2626', onMouseOut:e=>e.currentTarget.style.color='#94a3b8'
-              }, 'Ã')
+              }, '×')
             )
           )
         )
@@ -672,7 +672,7 @@ function TimeOffModal({ open, onClose, onSave, allEmployees, requests, onRemove 
   );
 }
 
-/* âââ Quick Edit Popup (works for both employees and equipment) âââ */
+/* ─── Quick Edit Popup (works for both employees and equipment) ─── */
 function QuickEditPopup({ project, position, allItems, field, onUpdate, onClose }) {
   const [search, setSearch] = useState('');
   const ref = useRef();
@@ -717,7 +717,7 @@ function QuickEditPopup({ project, position, allItems, field, onUpdate, onClose 
   );
 }
 
-/* âââ Setup Modal (shown when no Apps Script URL is configured) âââ */
+/* ─── Setup Modal (shown when no Apps Script URL is configured) ─── */
 function SetupBanner({ onDismiss }) {
   const [collapsed, setCollapsed] = useState(false);
   if (collapsed) return React.createElement('div', {
@@ -744,7 +744,7 @@ function SetupBanner({ onDismiss }) {
   );
 }
 
-/* âââ User Picker Modal âââ */
+/* ─── User Picker Modal ─── */
 function UserPickerModal({ open, onSelect, allUsers }) {
   const [selected, setSelected] = useState('');
   const [custom, setCustom] = useState('');
@@ -776,7 +776,7 @@ function UserPickerModal({ open, onSelect, allUsers }) {
   );
 }
 
-/* âââ Activity Dashboard Modal âââ */
+/* ─── Activity Dashboard Modal ─── */
 function ActivityDashboard({ open, onClose }) {
   const [activity, setActivity] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -824,7 +824,7 @@ function ActivityDashboard({ open, onClose }) {
     style:{ padding:'6px 14px',borderRadius:6,border:'none',background:tab===id?'#fff':'transparent',boxShadow:tab===id?'0 1px 2px rgba(0,0,0,0.08)':'none',cursor:'pointer',fontSize:12,fontWeight:tab===id?700:500,color:tab===id?'#2563eb':'#6b7280' }
   }, label);
 
-  const actionIcons = { board_open:'ð±', project_create:'â', project_edit:'âï¸', project_delete:'ðï¸', project_split:'âï¸', cc_toggle:'âï¸', timeoff_add:'ð´', timeoff_remove:'ðï¸' };
+  const actionIcons = { board_open:'📱', project_create:'➕', project_edit:'✏️', project_delete:'👑️', project_split:'✂️', cc_toggle:'☑️', timeoff_add:'🌴', timeoff_remove:'🗑️' };
   const actionLabels = { board_open:'Opened board', project_create:'Created project', project_edit:'Edited project', project_delete:'Deleted project', project_split:'Split project', cc_toggle:'CC check', timeoff_add:'Logged time off', timeoff_remove:'Removed time off' };
 
   return React.createElement(Modal, { open, onClose, title:'Usage Dashboard', width:600 },
@@ -834,7 +834,7 @@ function ActivityDashboard({ open, onClose }) {
       loading && React.createElement('div', { style:{ textAlign:'center',padding:20,color:'#6b7280',fontSize:13 }}, 'Loading activity data...'),
 
       !loading && tab === 'daily' && React.createElement('div', {},
-        React.createElement('p', { style:{ fontSize:12,color:'#6b7280',margin:'0 0 8px' }}, 'Last 14 days â whoâs been active:'),
+        React.createElement('p', { style:{ fontSize:12,color:'#6b7280',margin:'0 0 8px' }}, 'Last 14 days — who’s been active:'),
         userTotals.length === 0 ? React.createElement('p', { style:{ fontSize:13,color:'#94a3b8',textAlign:'center',padding:16 }}, 'No activity recorded yet. Activity will appear once PMs start using the board.') :
         React.createElement('table', { style:{ width:'100%',borderCollapse:'collapse',fontSize:13 }},
           React.createElement('thead', {},
@@ -870,11 +870,11 @@ function ActivityDashboard({ open, onClose }) {
       !loading && tab === 'feed' && React.createElement('div', { style:{ maxHeight:400,overflow:'auto' }},
         (!activity || activity.length === 0) ? React.createElement('p', { style:{ fontSize:13,color:'#94a3b8',textAlign:'center',padding:16 }}, 'No activity recorded yet.') :
         activity.slice(0, 100).map((a, i) => React.createElement('div', { key:i, style:{ display:'flex',alignItems:'flex-start',gap:8,padding:'8px 10px',borderBottom:'1px solid #f1f5f9',fontSize:12 }},
-          React.createElement('span', { style:{ fontSize:14,flexShrink:0 }}, actionIcons[a.action] || 'ð'),
+          React.createElement('span', { style:{ fontSize:14,flexShrink:0 }}, actionIcons[a.action] || '📌'),
           React.createElement('div', { style:{ flex:1,minWidth:0 }},
             React.createElement('span', { style:{ fontWeight:600,color:'#1e293b' }}, a.user || 'Unknown'),
             React.createElement('span', { style:{ color:'#64748b' }}, ' ' + (actionLabels[a.action] || a.action)),
-            a.details && React.createElement('span', { style:{ color:'#94a3b8' }}, ' â ' + a.details),
+            a.details && React.createElement('span', { style:{ color:'#94a3b8' }}, ' — ' + a.details),
           ),
           React.createElement('span', { style:{ fontSize:11,color:'#94a3b8',whiteSpace:'nowrap',flexShrink:0 }}, a.timestamp ? new Date(a.timestamp).toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '')
         ))
@@ -883,9 +883,9 @@ function ActivityDashboard({ open, onClose }) {
   );
 }
 
-/* âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+/* ═══════════════════════════════════════════════════════════════
    MAIN APP
-   âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ */
+   ═══════════════════════════════════════════════════════════════ */
 function App() {
   const [projects, setProjects] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -894,7 +894,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [syncStatus, setSyncStatus] = useState(api.isConnected() ? 'saving' : 'offline');
 
-  /* ââ Guards against the 30s auto-refresh clobbering local edits ââ
+  /* ── Guards against the 30s auto-refresh clobbering local edits ──
      syncStatusRef mirrors syncStatus for use inside the interval closure;
      lastLocalChangeRef records when a local save started/finished so any
      refresh response fetched BEFORE that moment is discarded as stale. */
@@ -920,7 +920,7 @@ function App() {
   const [showTimeOff, setShowTimeOff] = useState(false);
   const [showTimeOffModal, setShowTimeOffModal] = useState(false);
 
-  /* ââ User identity (stored in localStorage) ââ */
+  /* ── User identity (stored in localStorage) ── */
   const [currentUser, setCurrentUser] = useState(() => {
     try { return localStorage.getItem('jobboard_user') || ''; } catch { return ''; }
   });
@@ -934,7 +934,7 @@ function App() {
     if (api.isConnected()) api.logActivity({ user: name, action: 'board_open', details: '', timestamp: new Date().toISOString() });
   }
 
-  /* ââ Activity logging helper ââ */
+  /* ── Activity logging helper ── */
   function logAction(action, details) {
     if (!api.isConnected() || !currentUser) return;
     api.logActivity({ user: currentUser, action, details: details || '', timestamp: new Date().toISOString() });
@@ -945,7 +945,7 @@ function App() {
   const [projectOrder, setProjectOrder] = useState([]); /* array of project IDs for display order */
   const dragRef = useRef(null); /* tracks which project ID is being dragged */
 
-  /* ââ Keep projectOrder in sync â add new projects, remove deleted ones ââ */
+  /* ── Keep projectOrder in sync — add new projects, remove deleted ones ── */
   useEffect(() => {
     setProjectOrder(prev => {
       const ids = new Set(projects.map(p => p.id));
@@ -956,7 +956,7 @@ function App() {
     });
   }, [projects]);
 
-  /* ââ Load data on mount ââ */
+  /* ── Load data on mount ── */
   useEffect(() => {
     async function load() {
       if (api.isConnected()) {
@@ -991,7 +991,7 @@ function App() {
     load();
   }, []);
 
-  /* ââ Show user picker if no user identified; log board open for returning users ââ */
+  /* ── Show user picker if no user identified; log board open for returning users ── */
   useEffect(() => {
     if (!loading) {
       if (!currentUser) { setShowUserPicker(true); }
@@ -999,11 +999,11 @@ function App() {
     }
   }, [loading]);
 
-  /* ââ Auto-refresh from Google Sheets every 30 seconds ââ */
+  /* ── Auto-refresh from Google Sheets every 30 seconds ── */
   useEffect(() => {
     if (!api.isConnected()) return;
     const interval = setInterval(async () => {
-      /* Don't fetch while a save is in flight â the server may not have the change yet */
+      /* Don't fetch while a save is in flight — the server may not have the change yet */
       if (syncStatusRef.current === 'saving') return;
       const fetchStart = Date.now();
       try {
@@ -1033,7 +1033,7 @@ function App() {
 
   function getProjectsForDay(date) { const ds=fmtDate(date); return projects.filter(p=>p.startDate<=ds&&p.endDate>=ds); }
 
-  /* ââ Deterministic calendar arrangement ââ
+  /* ── Deterministic calendar arrangement ──
      Priority: (1) projects with the same name stay in the same row (split parts, repeats),
      (2) shorter durations toward the top, longer toward the bottom,
      (3) group by PM color (subordinate to duration).
@@ -1057,7 +1057,7 @@ function App() {
     for (const p of vis) { (groupsMap[p.name] = groupsMap[p.name] || []).push(p); }
     const groups = Object.values(groupsMap).map(parts => {
       parts.sort((a, b) => a.startDate.localeCompare(b.startDate) || (a.id - b.id));
-      /* Parts that overlap an earlier same-name part can't share its row â placed individually below */
+      /* Parts that overlap an earlier same-name part can't share its row — placed individually below */
       const primary = []; const overflow = [];
       for (const p of parts) {
         if (primary.length === 0 || p.startDate > primary[primary.length - 1].endDate) primary.push(p);
@@ -1086,7 +1086,7 @@ function App() {
     return laneOf;
   }, [projects, days]);
 
-  /* ââ Compute spanning project segments for a week row ââ */
+  /* ── Compute spanning project segments for a week row ── */
   function getWeekSegments(weekDays) {
     const ws = fmtDate(weekDays[0]), we = fmtDate(weekDays[6]);
     const segs = [];
@@ -1105,7 +1105,7 @@ function App() {
     return { segments:segs, numLanes };
   }
 
-  /* ââ CRUD with Google Sheets sync ââ */
+  /* ── CRUD with Google Sheets sync ── */
   async function handleSaveProject(data) {
     if (!data.equipment) data.equipment = [];
     const newEmps = data.employees.filter(e => !employees.includes(e));
@@ -1123,7 +1123,7 @@ function App() {
         catch { setSyncStatus('error'); }
       }
     } else {
-      // Create new â assign sortOrder at the end
+      // Create new — assign sortOrder at the end
       data.sortOrder = projectOrder.length;
       const newProject = { ...data, id: nextId };
       setProjects(prev => [...prev, newProject]);
@@ -1156,8 +1156,8 @@ function App() {
   async function handleSplitProject(project, splitDateStr) {
     logAction('project_split', project.name + ' at ' + splitDateStr);
     /* Split a project into two parts at splitDateStr.
-       Part 1: original start â day before split date (keeps original crew)
-       Part 2: split date â original end (keeps original crew, user edits after) */
+       Part 1: original start → day before split date (keeps original crew)
+       Part 2: split date → original end (keeps original crew, user edits after) */
     const dayBefore = fmtDate(addDays(new Date(splitDateStr+'T00:00:00'), -1));
     const cc = project.ccChecks || {};
     const cc1 = {}, cc2 = {};
@@ -1240,7 +1240,7 @@ function App() {
     }
   }
 
-  /* ââ TBD Queue handlers ââ */
+  /* ── TBD Queue handlers ── */
   async function handleAddTBDItem() {
     if (!newTBDItem.trim()) return;
     const updated = [...tbdQueue, newTBDItem.trim()];
@@ -1266,7 +1266,7 @@ function App() {
     logAction('tbd_remove', removed);
   }
 
-  /* ââ Time Off handlers ââ */
+  /* ── Time Off handlers ── */
   async function handleAddTimeOff(req) {
     const newReq = { ...req, id: Date.now() };
     const updated = [...timeOffRequests, newReq];
@@ -1297,7 +1297,7 @@ function App() {
   const today = fmtDate(new Date());
   const usedColors = projects.map(p => p.color);
 
-  /* ââ Overbooking detection: find employees assigned to 2+ projects on the same day (visible weeks only) ââ */
+  /* ── Overbooking detection: find employees assigned to 2+ projects on the same day (visible weeks only) ── */
   const overbookedEmps = useMemo(() => {
     const empDayMap = {}; // { empName: { date: [projectName, ...] } }
     const visStart = days.length > 0 ? fmtDate(days[0]) : '';
@@ -1354,7 +1354,7 @@ function App() {
     return pairs;
   }, [projects, days]);
 
-  /* ââ Equipment overbooking detection (visible weeks only) ââ */
+  /* ── Equipment overbooking detection (visible weeks only) ── */
   const overbookedEquip = useMemo(() => {
     const equipDayMap = {};
     const visStart = days.length > 0 ? fmtDate(days[0]) : '';
@@ -1385,7 +1385,7 @@ function App() {
 
   const overbookedEquipSet = useMemo(() => new Set(Object.keys(overbookedEquip)), [overbookedEquip]);
 
-  /* ââ Available employees per day (unassigned to any project) ââ */
+  /* ── Available employees per day (unassigned to any project) ── */
   const [showAvailability, setShowAvailability] = useState(false);
 
   const availableByDay = useMemo(() => {
@@ -1405,7 +1405,7 @@ function App() {
     return result;
   }, [days, projects, employees, timeOffRequests]);
 
-  /* ââ Time off: requests per visible day + conflict detection ââ */
+  /* ── Time off: requests per visible day + conflict detection ── */
   const timeOffByDay = useMemo(() => {
     const result = {};
     for (const day of days) {
@@ -1418,7 +1418,7 @@ function App() {
   /* Employees assigned to a project on a day they requested off (visible weeks only) */
   const timeOffConflicts = useMemo(() => {
     const conflicts = {}; // { empName: [{ date, project }] }
-    const pairs = new Set(); // emp \0 projectId â for calendar highlighting
+    const pairs = new Set(); // emp \0 projectId — for calendar highlighting
     for (const day of days) {
       const ds = fmtDate(day);
       for (const r of timeOffRequests) {
@@ -1435,7 +1435,7 @@ function App() {
     return { conflicts, pairs };
   }, [days, timeOffRequests, projects]);
 
-  /* ââ By Person view: for each assigned employee, map their projects per day ââ */
+  /* ── By Person view: for each assigned employee, map their projects per day ── */
   const byPersonData = useMemo(() => {
     const empSet = new Set();
     for (const p of projects) {
@@ -1469,31 +1469,31 @@ function App() {
 
     if (loading) return React.createElement('div', { style:{ display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',fontSize:16,color:'#6b7280' }}, 'Loading Job Board...');
 
-  /* âââ Render âââ */
+  /* ─── Render ─── */
   return React.createElement('div', { style:{ display:'flex',flexDirection:'column',height:'100vh',overflow:'hidden' }},
 
     /* Setup banner when not connected */
     !api.isConnected() && React.createElement(SetupBanner),
 
-    /* ââ Header ââ */
+    /* ── Header ── */
     React.createElement('div', {
       style:{ display:'flex',alignItems:'center',justifyContent:'space-between',padding:'6px 10px',background:'#fff',borderBottom:'1px solid #e5e7eb',boxShadow:'0 1px 3px rgba(0,0,0,0.05)',flexShrink:0,flexWrap:'wrap',gap:4 }
     },
       React.createElement('div', { style:{ display:'flex',alignItems:'center',gap:8,flexWrap:'wrap' }},
         React.createElement('div', { style:{ display:'flex',flexDirection:'column',alignItems:'flex-start',gap:2 }},
-          React.createElement('h1', { style:{ fontSize:18,fontWeight:800,color:'#1e293b',letterSpacing:'-0.02em',margin:0,lineHeight:1 }}, 'Job Board'),
-          React.createElement('img', { src:NWS_LOGO, alt:'Nationwide Services', style:{ height:64,width:'auto',display:'block',borderRadius:4 }})
-        ),
+        React.createElement('h1', { style:{ fontSize:18,fontWeight:800,color:'#1e293b',letterSpacing:'-0.02em',margin:0,lineHeight:1 }}, 'Job Board'),
+        React.createElement('img', { src:NWS_LOGO, alt:'Nationwide Services', style:{ height:64,width:'auto',display:'block',borderRadius:4 }})
+      ),
         /* Nav arrows + Sync badge stacked */
         React.createElement('div', { style:{ display:'flex',flexDirection:'column',gap:2,alignItems:'flex-start' }},
           React.createElement('div', { style:{ display:'flex',alignItems:'center',gap:3 }},
             /* Nav arrows */
             React.createElement('div', { style:{ display:'flex',alignItems:'center',gap:1,background:'#f3f4f6',borderRadius:6,padding:1 }},
-              React.createElement('button', { onClick:()=>navigateWeeks(-numWeeks), style:{ padding:'3px 7px',borderRadius:4,border:'none',background:'transparent',cursor:'pointer',fontSize:12,color:'#6b7280',fontWeight:600 }, title:`Back ${numWeeks} weeks` }, 'âª'),
-              React.createElement('button', { onClick:()=>navigateWeeks(-1), style:{ padding:'3px 7px',borderRadius:4,border:'none',background:'transparent',cursor:'pointer',fontSize:12,color:'#6b7280',fontWeight:600 }, title:'Back 1 week' }, 'â¨'),
+              React.createElement('button', { onClick:()=>navigateWeeks(-numWeeks), style:{ padding:'3px 7px',borderRadius:4,border:'none',background:'transparent',cursor:'pointer',fontSize:12,color:'#6b7280',fontWeight:600 }, title:`Back ${numWeeks} weeks` }, '⟪'),
+              React.createElement('button', { onClick:()=>navigateWeeks(-1), style:{ padding:'3px 7px',borderRadius:4,border:'none',background:'transparent',cursor:'pointer',fontSize:12,color:'#6b7280',fontWeight:600 }, title:'Back 1 week' }, '⟨'),
               React.createElement('button', { onClick:goToToday, style:{ padding:'3px 10px',borderRadius:4,border:'none',background:'#fff',cursor:'pointer',fontSize:11,fontWeight:600,color:'#2563eb',boxShadow:'0 1px 2px rgba(0,0,0,0.08)' }}, 'Today'),
-              React.createElement('button', { onClick:()=>navigateWeeks(1), style:{ padding:'3px 7px',borderRadius:4,border:'none',background:'transparent',cursor:'pointer',fontSize:12,color:'#6b7280',fontWeight:600 }}, 'â©'),
-              React.createElement('button', { onClick:()=>navigateWeeks(numWeeks), style:{ padding:'3px 7px',borderRadius:4,border:'none',background:'transparent',cursor:'pointer',fontSize:12,color:'#6b7280',fontWeight:600 }, title:`Forward ${numWeeks} weeks` }, 'â«')
+              React.createElement('button', { onClick:()=>navigateWeeks(1), style:{ padding:'3px 7px',borderRadius:4,border:'none',background:'transparent',cursor:'pointer',fontSize:12,color:'#6b7280',fontWeight:600 }}, '⟩'),
+              React.createElement('button', { onClick:()=>navigateWeeks(numWeeks), style:{ padding:'3px 7px',borderRadius:4,border:'none',background:'transparent',cursor:'pointer',fontSize:12,color:'#6b7280',fontWeight:600 }, title:`Forward ${numWeeks} weeks` }, '⟫')
             ),
             /* Week count selector */
             React.createElement('div', { style:{ display:'flex',alignItems:'center',gap:1,background:'#f3f4f6',borderRadius:6,padding:1 }},
@@ -1512,15 +1512,15 @@ function App() {
           React.createElement('button', {
             onClick:()=>setViewMode('employees'),
             style:{ padding:'3px 8px',borderRadius:4,border:'none',background:viewMode==='employees'?'#fff':'transparent',boxShadow:viewMode==='employees'?'0 1px 2px rgba(0,0,0,0.08)':'none',cursor:'pointer',fontSize:11,fontWeight:viewMode==='employees'?700:500,color:viewMode==='employees'?'#2563eb':'#6b7280',transition:'all 0.15s',display:'flex',alignItems:'center',gap:3 }
-          }, 'ð¤ Employees'),
+          }, '👤 Employees'),
           React.createElement('button', {
             onClick:()=>setViewMode('equipment'),
             style:{ padding:'3px 8px',borderRadius:4,border:'none',background:viewMode==='equipment'?'#fff':'transparent',boxShadow:viewMode==='equipment'?'0 1px 2px rgba(0,0,0,0.08)':'none',cursor:'pointer',fontSize:11,fontWeight:viewMode==='equipment'?700:500,color:viewMode==='equipment'?'#ea580c':'#6b7280',transition:'all 0.15s',display:'flex',alignItems:'center',gap:3 }
-          }, 'ð ï¸ Equipment'),
+          }, '🛠️ Equipment'),
           React.createElement('button', {
             onClick:()=>setViewMode('byPerson'),
             style:{ padding:'3px 8px',borderRadius:4,border:'none',background:viewMode==='byPerson'?'#fff':'transparent',boxShadow:viewMode==='byPerson'?'0 1px 2px rgba(0,0,0,0.08)':'none',cursor:'pointer',fontSize:11,fontWeight:viewMode==='byPerson'?700:500,color:viewMode==='byPerson'?'#7c3aed':'#6b7280',transition:'all 0.15s',display:'flex',alignItems:'center',gap:3 }
-          }, 'ð By Person')
+          }, '📅 By Person')
         )
       ),
       React.createElement('div', { style:{ display:'flex',gap:6,alignItems:'center' }},
@@ -1530,7 +1530,7 @@ function App() {
           style:{ display:'flex',alignItems:'center',gap:4,padding:'3px 8px',borderRadius:6,background:'#f0fdf4',border:'1px solid #bbf7d0',cursor:'pointer',fontSize:11,fontWeight:600,color:'#166534' },
           title:'Click to switch user'
         },
-          React.createElement('span', { style:{ fontSize:12 }}, 'ð¤'),
+          React.createElement('span', { style:{ fontSize:12 }}, '👤'),
           currentUser
         ),
         /* Usage Dashboard button */
@@ -1539,7 +1539,7 @@ function App() {
           style:{ padding:'3px 8px',borderRadius:6,border:'1px solid #c4b5fd',background:'#faf5ff',color:'#7c3aed',fontWeight:600,fontSize:11,cursor:'pointer',display:'flex',alignItems:'center',gap:3 },
           onMouseOver:e=>e.currentTarget.style.background='#f3e8ff', onMouseOut:e=>e.currentTarget.style.background='#faf5ff',
           title:'View usage activity'
-        }, 'ð Activity'),
+        }, '📊 Activity'),
         /* Stacked: Employees, Equipment, Import CSV */
         React.createElement('div', { style:{ display:'flex',flexDirection:'column',gap:2 }},
           React.createElement('button', {
@@ -1551,7 +1551,7 @@ function App() {
             onClick:()=>setShowEquipment(true),
             style:{ padding:'2px 8px',borderRadius:4,border:'1px solid #ea580c33',background:'#fff',color:'#ea580c',fontWeight:600,fontSize:11,cursor:'pointer',whiteSpace:'nowrap' },
             onMouseOver:e=>e.currentTarget.style.background='#fff7ed', onMouseOut:e=>e.currentTarget.style.background='#fff'
-          }, 'Equipment')
+          }, 'Equipment'),
         ),
         React.createElement('div', { style:{ display:'flex',flexDirection:'column',gap:3 }},
           React.createElement('button', {
@@ -1564,14 +1564,14 @@ function App() {
             style:{ padding:'6px 12px',borderRadius:6,border:'none',background:'#0d9488',color:'#fff',fontWeight:600,fontSize:11,cursor:'pointer',boxShadow:'0 1px 3px rgba(13,148,136,0.3)',whiteSpace:'nowrap' },
             onMouseOver:e=>e.currentTarget.style.background='#0f766e', onMouseOut:e=>e.currentTarget.style.background='#0d9488',
             title:'Log a requested time off for an employee'
-          }, 'ð´ Time Off')
+          }, '🌴 Time Off')
         )
       )
     ),
 
-    /* ââ Calendar Grid ââ */
+    /* ── Calendar Grid ── */
     viewMode === 'byPerson' ?
-    /* ââ BY PERSON VIEW ââ */
+    /* ══ BY PERSON VIEW ══ */
     React.createElement('div', { style:{ flex:1,overflow:'auto',padding:'12px' }},
       React.createElement('div', { style:{ borderRadius:10,overflow:'hidden',border:'1px solid #e5e7eb' }},
         /* Sticky header row with day names + dates */
@@ -1634,7 +1634,7 @@ function App() {
       )
     )
     :
-    /* ââ STANDARD CALENDAR VIEW (Employees / Equipment) ââ */
+    /* ══ STANDARD CALENDAR VIEW (Employees / Equipment) ══ */
     React.createElement('div', { style:{ flex:1,overflow:'auto',padding:'12px',display:'flex',flexDirection:'column',gap:0 }},
       /* Day headers */
       React.createElement('div', {
@@ -1642,7 +1642,7 @@ function App() {
       },
         DAY_NAMES.map((d,i) => React.createElement('div', { key:d, style:{ padding:'8px 10px',background: i>=5 ? '#f1f5f9':'#fff',textAlign:'center',fontSize:13,fontWeight:700,color: i>=5 ? '#94a3b8':'#374151',textTransform:'uppercase',letterSpacing:'0.05em' }}, d))
       ),
-      /* Week rows â projects span across days */
+      /* Week rows — projects span across days */
       weeks.map((week, wi) => {
         const { segments, numLanes } = getWeekSegments(week);
         const totalRows = 1 + Math.max(numLanes, 1);
@@ -1651,12 +1651,12 @@ function App() {
           style:{ display:'grid',gridTemplateColumns:'repeat(7, 1fr)',gridTemplateRows:`auto repeat(${Math.max(numLanes,1)}, auto)`,borderRadius: wi===numWeeks-1 ? '0 0 10px 10px':0,overflow:'hidden',flex:1,minHeight:0,borderTop:'1px solid #e5e7eb' }
         },
           [].concat(
-            /* Day background cells â span all rows */
+            /* Day background cells — span all rows */
             week.map((date, di) => {
               const ds=fmtDate(date), isToday=ds===today, isWeekend=di>=5;
               return React.createElement('div', { key:'bg-'+ds, style:{ gridColumn:di+1,gridRow:`1 / ${totalRows+1}`,background:isToday?'#eff6ff':isWeekend?'#f8fafc':'#fff',borderRight:di<6?'1px solid #e5e7eb':'none',borderLeft:isToday?'3px solid #2563eb':'none' }});
             }),
-            /* Date numbers â row 1 */
+            /* Date numbers — row 1 */
             week.map((date, di) => {
               const ds=fmtDate(date), isToday=ds===today;
               return React.createElement('div', { key:'d-'+ds, style:{ gridColumn:di+1,gridRow:1,padding:'4px 5px',zIndex:1 }},
@@ -1665,12 +1665,12 @@ function App() {
                 )
               );
             }),
-            /* Project spanning bars â rows 2+ */
+            /* Project spanning bars — rows 2+ */
             segments.map(seg => {
               const p=seg.project, fs=numWeeks<=2?10:9, nfs=numWeeks<=2?13:11;
               return React.createElement('div', {
                 key:`p-${p.id}-${wi}`,
-                /* Drag-reorder disabled â rows are auto-arranged (duration â, then PM color; same name = same row) */
+                /* Drag-reorder disabled — rows are auto-arranged (duration ↑, then PM color; same name = same row) */
                 onClick:e=>{e.stopPropagation();setEditProject(p);setShowProjectModal(true);},
                 onContextMenu:e=>{e.preventDefault();e.stopPropagation();setQuickEdit({project:p,position:{x:e.clientX,y:e.clientY},field:viewMode});},
                 onMouseEnter:()=>setHoveredProject(p.id), onMouseLeave:()=>setHoveredProject(null),
@@ -1682,7 +1682,7 @@ function App() {
                   p.employees.map((e,idx) => {
                     const isOB = overbookedProjectPairs.has(e + '\u0000' + p.id);
                     const isTO = !isOB && timeOffConflicts.pairs.has(e + '\u0000' + p.id);
-                    return React.createElement('span', { key:e, title: isOB ? `OVERBOOKED: ${e} is assigned to multiple projects on the same day` : isTO ? `TIME OFF CONFLICT: ${e} requested time off during this project` : '', style:{ fontSize:fs,color:isOB?'#dc2626':isTO?'#b45309':'#64748b',fontWeight:(isOB||isTO)?700:400,lineHeight:1.3,whiteSpace:'nowrap',background:isOB?'#fef2f2':isTO?'#fef3c7':'transparent',padding:(isOB||isTO)?'0 3px':0,borderRadius:(isOB||isTO)?3:0,animation:isOB?'overbookPulse 1.5s infinite':'' }}, (isTO?'ð´ ':'')+e+(idx<p.employees.length-1?',':''));
+                    return React.createElement('span', { key:e, title: isOB ? `OVERBOOKED: ${e} is assigned to multiple projects on the same day` : isTO ? `TIME OFF CONFLICT: ${e} requested time off during this project` : '', style:{ fontSize:fs,color:isOB?'#dc2626':isTO?'#b45309':'#64748b',fontWeight:(isOB||isTO)?700:400,lineHeight:1.3,whiteSpace:'nowrap',background:isOB?'#fef2f2':isTO?'#fef3c7':'transparent',padding:(isOB||isTO)?'0 3px':0,borderRadius:(isOB||isTO)?3:0,animation:isOB?'overbookPulse 1.5s infinite':'' }}, (isTO?'🌴 ':'')+e+(idx<p.employees.length-1?',':''));
                   })
                   :
                   (p.equipment||[]).map((e,idx) => {
@@ -1691,13 +1691,13 @@ function App() {
                   })
                   , (viewMode === 'employees' && Number(p.tempsNeeded) > 0 ? React.createElement('span', { key:'__tempsNeeded', style:{ fontSize:fs, color:'#7c3aed', fontWeight:600, fontStyle:'italic', whiteSpace:'nowrap', lineHeight:1.3, marginLeft: (p.employees && p.employees.length) ? 3 : 0 }}, '+' + p.tempsNeeded + ' temps') : null)
                 ),
-                /* Estimated needs â bottom of bar, only on unstaffed projects */
+                /* Estimated needs — bottom of bar, only on unstaffed projects */
                 (viewMode === 'employees' && p.employees.length === 0 && (p.crewSizeEst || p.equipmentNeeded) ? React.createElement('div', {
                     style:{ fontSize:fs, color:'#2563eb', fontStyle:'italic', lineHeight:1.3, marginTop:2, paddingTop:2, borderTop:'1px dashed #93c5fd' }
-                  }, [p.crewSizeEst ? 'Crew Est: ' + p.crewSizeEst : null, p.equipmentNeeded ? 'Equip: ' + p.equipmentNeeded : null].filter(Boolean).join(' â¢ ')) : null),
+                  }, [p.crewSizeEst ? 'Crew Est: ' + p.crewSizeEst : null, p.equipmentNeeded ? 'Equip: ' + p.equipmentNeeded : null].filter(Boolean).join(' • ')) : null),
                 (viewMode === 'equipment' && (p.equipment||[]).length === 0 && (p.equipmentNeeded || p.crewSizeEst) ? React.createElement('div', {
                     style:{ fontSize:fs, color:'#2563eb', fontStyle:'italic', lineHeight:1.3, marginTop:2, paddingTop:2, borderTop:'1px dashed #93c5fd' }
-                  }, [p.equipmentNeeded ? 'Needed: ' + p.equipmentNeeded : null, p.crewSizeEst ? 'Crew Est: ' + p.crewSizeEst : null].filter(Boolean).join(' â¢ ')) : null)
+                  }, [p.equipmentNeeded ? 'Needed: ' + p.equipmentNeeded : null, p.crewSizeEst ? 'Crew Est: ' + p.crewSizeEst : null].filter(Boolean).join(' • ')) : null)
               );
             })
           )
@@ -1705,7 +1705,7 @@ function App() {
       })
     ),
 
-    /* ââ Requested Time Off by Day ââ */
+    /* ── Requested Time Off by Day ── */
     React.createElement('div', {
       style:{ flexShrink:0,borderTop:'2px solid #d1d5db',background:'#f9fafb' }
     },
@@ -1717,14 +1717,14 @@ function App() {
         onMouseOut:e=>e.currentTarget.style.background='transparent'
       },
         React.createElement('div', { style:{ display:'flex',alignItems:'center',gap:8,flexWrap:'wrap' }},
-          React.createElement('span', { style:{ fontSize:14 }}, 'ð´'),
+          React.createElement('span', { style:{ fontSize:14 }}, '🌴'),
           React.createElement('span', { style:{ fontSize:13,fontWeight:700,color:'#334155' }}, 'Requested Time Off'),
           React.createElement('span', { style:{ fontSize:11,fontWeight:500,color:'#94a3b8' }}, `(${timeOffRequests.length} request${timeOffRequests.length===1?'':'s'} logged)`),
           Object.keys(timeOffConflicts.conflicts).length > 0 && React.createElement('span', {
             style:{ fontSize:10,fontWeight:700,color:'#b45309',background:'#fef3c7',border:'1px solid #fde68a',padding:'1px 6px',borderRadius:4 }
-          }, `â ï¸ ${Object.keys(timeOffConflicts.conflicts).length} scheduled during time off`)
+          }, `⚠️ ${Object.keys(timeOffConflicts.conflicts).length} scheduled during time off`)
         ),
-        React.createElement('span', { style:{ fontSize:12,color:'#94a3b8',fontWeight:600 }}, showTimeOff ? 'â¼ Hide' : 'â¶ Show')
+        React.createElement('span', { style:{ fontSize:12,color:'#94a3b8',fontWeight:600 }}, showTimeOff ? '▼ Hide' : '▶ Show')
       ),
       /* Grid of time-off requests per day (aligned with calendar columns) */
       showTimeOff && React.createElement('div', {
@@ -1757,16 +1757,16 @@ function App() {
                         const hasConflict = timeOffConflicts.pairs.size > 0 && projects.some(p => p.startDate <= ds && p.endDate >= ds && p.employees.includes(r.employee));
                         return React.createElement('div', {
                           key:r.id,
-                          title: `${r.employee}: off ${r.startDate} to ${r.endDate}` + (hasConflict ? ' â â ï¸ ASSIGNED TO A PROJECT THIS DAY' : ''),
+                          title: `${r.employee}: off ${r.startDate} to ${r.endDate}` + (hasConflict ? ' — ⚠️ ASSIGNED TO A PROJECT THIS DAY' : ''),
                           style:{ display:'flex',alignItems:'center',justifyContent:'space-between',gap:2,fontSize:10,fontWeight:hasConflict?700:500,lineHeight:1.5,color:hasConflict?'#b45309':'#0d9488',background:hasConflict?'#fef3c7':'transparent',padding:hasConflict?'0 3px':0,borderRadius:hasConflict?3:0,whiteSpace:'nowrap',overflow:'hidden' }
                         },
-                          React.createElement('span', { style:{ overflow:'hidden',textOverflow:'ellipsis' }}, (hasConflict?'â ï¸ ':'') + r.employee),
+                          React.createElement('span', { style:{ overflow:'hidden',textOverflow:'ellipsis' }}, (hasConflict?'⚠️ ':'') + r.employee),
                           React.createElement('span', {
                             onClick:e=>{ e.stopPropagation(); handleRemoveTimeOff(r.id); },
                             title:'Remove this time off request',
                             style:{ cursor:'pointer',fontWeight:700,color:'#94a3b8',flexShrink:0,padding:'0 2px' },
                             onMouseOver:e=>e.currentTarget.style.color='#dc2626', onMouseOut:e=>e.currentTarget.style.color='#94a3b8'
-                          }, 'Ã')
+                          }, '×')
                         );
                       })
                     )
@@ -1777,7 +1777,7 @@ function App() {
       )
     ),
 
-    /* ââ Available Employees by Day ââ */
+    /* ── Available Employees by Day ── */
     React.createElement('div', {
       style:{ flexShrink:0,borderTop:'2px solid #d1d5db',background:'#f9fafb' }
     },
@@ -1793,7 +1793,7 @@ function App() {
           React.createElement('span', { style:{ fontSize:13,fontWeight:700,color:'#334155' }}, 'Available Employees'),
           React.createElement('span', { style:{ fontSize:11,fontWeight:500,color:'#94a3b8' }}, `(unassigned by day)`)
         ),
-        React.createElement('span', { style:{ fontSize:12,color:'#94a3b8',fontWeight:600 }}, showAvailability ? 'â¼ Hide' : 'â¶ Show')
+        React.createElement('span', { style:{ fontSize:12,color:'#94a3b8',fontWeight:600 }}, showAvailability ? '▼ Hide' : '▶ Show')
       ),
       /* Grid of available employees per day */
       showAvailability && React.createElement('div', {
@@ -1834,7 +1834,7 @@ function App() {
       )
     ),
 
-    /* ââ TBD Project Queue ââ */
+    /* ── TBD Project Queue ── */
     React.createElement('div', {
       style:{ flexShrink:0,borderTop:'2px solid #d1d5db',background:'#f9fafb' }
     },
@@ -1850,7 +1850,7 @@ function App() {
           React.createElement('span', { style:{ fontSize:13,fontWeight:700,color:'#334155' }}, 'TBD Project Queue'),
           React.createElement('span', { style:{ fontSize:11,fontWeight:500,color:'#94a3b8' }}, 'Awarded Jobs that are flexible or unknown start date')
         ),
-        React.createElement('span', { style:{ fontSize:12,color:'#94a3b8',fontWeight:600 }}, showTBDQueue ? 'â¼ Hide' : 'â¶ Show')
+        React.createElement('span', { style:{ fontSize:12,color:'#94a3b8',fontWeight:600 }}, showTBDQueue ? '▼ Hide' : '▶ Show')
       ),
       /* Queue content */
       showTBDQueue && React.createElement('div', {
@@ -1887,14 +1887,14 @@ function App() {
                     style:{ background:'none',border:'none',cursor:'pointer',fontSize:14,color:'#94a3b8',padding:'0 4px',lineHeight:1 },
                     onMouseOver:e=>e.currentTarget.style.color='#dc2626',
                     onMouseOut:e=>e.currentTarget.style.color='#94a3b8'
-                  }, 'Ã')
+                  }, '×')
                 )
               )
             )
       )
     ),
 
-    /* ââ Overbooking warnings ââ */
+    /* ── Overbooking warnings ── */
     (Object.keys(overbookedEmps).length > 0 || Object.keys(overbookedEquip).length > 0 || Object.keys(timeOffConflicts.conflicts).length > 0) && React.createElement('div', {
       style:{ padding:'8px 16px',background:'#fef2f2',borderTop:'2px solid #fca5a5',display:'flex',alignItems:'flex-start',gap:10,flexShrink:0,overflow:'auto',maxHeight:140 }
     },
@@ -1939,7 +1939,7 @@ function App() {
       )
     ),
 
-    /* ââ Modals ââ */
+    /* ── Modals ── */
     React.createElement(ProjectFormModal, { open:showProjectModal, onClose:()=>{ setShowProjectModal(false); setEditProject(null); }, onSave:handleSaveProject, onDelete:handleDeleteProject, onSplit:handleSplitProject, project:editProject, allEmployees:employees, allEquipment:equipment, usedColors }),
     React.createElement(CSVImportModal, { open:showImport, onClose:()=>setShowImport(false), onImport:handleImportProjects }),
     React.createElement(ManageEmployeesModal, { open:showEmployees, onClose:()=>setShowEmployees(false), employees, onUpdate:handleUpdateEmployees }),
