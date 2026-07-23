@@ -382,6 +382,7 @@ function ProjectFormModal({ open, onClose, onSave, onDelete, onSplit, project, a
   const [tempsNeeded, setTempsNeeded] = useState('');
   const [hubspotDealId, setHubspotDealId] = useState('');
   const [equipmentNeeded, setEquipmentNeeded] = useState('');
+  const [notes, setNotes] = useState('');
 
   /* Can split if project spans more than 1 day */
   const canSplit = isEdit && startDate && endDate && startDate < endDate;
@@ -391,8 +392,8 @@ function ProjectFormModal({ open, onClose, onSave, onDelete, onSplit, project, a
 
   useEffect(() => {
     if (open) {
-      if (project) { setName(project.name); setStartDate(project.startDate); setEndDate(project.endDate); setColor(project.color); setEmps([...project.employees]); setEquips([...(project.equipment||[])]); setCrewSizeEst(project.crewSizeEst||''); setTempsNeeded(project.tempsNeeded!=null?String(project.tempsNeeded):''); setHubspotDealId(project.hubspotDealId||''); setEquipmentNeeded(project.equipmentNeeded||''); }
-      else { setName(''); setStartDate(fmtDate(new Date())); setEndDate(fmtDate(new Date())); setColor(PROJECT_COLORS.find(c => !usedColors.includes(c)) || PROJECT_COLORS[0]); setEmps([]); setEquips([]); setCrewSizeEst(''); setTempsNeeded(''); setHubspotDealId(''); }
+      if (project) { setName(project.name); setStartDate(project.startDate); setEndDate(project.endDate); setColor(project.color); setEmps([...project.employees]); setEquips([...(project.equipment||[])]); setCrewSizeEst(project.crewSizeEst||''); setTempsNeeded(project.tempsNeeded!=null?String(project.tempsNeeded):''); setHubspotDealId(project.hubspotDealId||''); setEquipmentNeeded(project.equipmentNeeded||''); setNotes(project.notes||''); }
+      else { setName(''); setStartDate(fmtDate(new Date())); setEndDate(fmtDate(new Date())); setColor(PROJECT_COLORS.find(c => !usedColors.includes(c)) || PROJECT_COLORS[0]); setEmps([]); setEquips([]); setCrewSizeEst(''); setTempsNeeded(''); setHubspotDealId(''); setNotes(''); }
       setNewEmp(''); setNewEquip(''); setSplitMode(false); setSplitDate('');
     }
   }, [open, project]);
@@ -401,7 +402,7 @@ function ProjectFormModal({ open, onClose, onSave, onDelete, onSplit, project, a
   const availableEquip = allEquipment.filter(e => !equips.includes(e) && e.toLowerCase().includes(newEquip.toLowerCase()));
   function addEmp(n) { setEmps(prev => prev.includes(n) ? prev : [...prev, n]); setNewEmp(''); setShowDrop(false); }
   function addEquip(n) { setEquips(prev => prev.includes(n) ? prev : [...prev, n]); setNewEquip(''); setShowEquipDrop(false); }
-  function handleSave() { if (!name.trim()||!startDate||!endDate) return; onSave({ name:name.trim(), startDate, endDate, color, employees:emps, equipment:equips, id:project?.id, crewSizeEst, hubspotDealId, equipmentNeeded, tempsNeeded }); onClose(); }
+  function handleSave() { if (!name.trim()||!startDate||!endDate) return; onSave({ name:name.trim(), startDate, endDate, color, employees:emps, equipment:equips, id:project?.id, crewSizeEst, hubspotDealId, equipmentNeeded, tempsNeeded, notes }); onClose(); }
 
   const inp = { padding:'8px 12px',borderRadius:8,border:'1px solid #d1d5db',fontSize:14,width:'100%',outline:'none' };
 
@@ -428,6 +429,10 @@ function ProjectFormModal({ open, onClose, onSave, onDelete, onSplit, project, a
       React.createElement('div', {},
         React.createElement('label', { style:{ fontSize:12,fontWeight:600,color:'#374151',marginBottom:4,display:'block' }}, 'Equipment Needed'),
         React.createElement('input', { value:equipmentNeeded, onChange:e=>setEquipmentNeeded(e.target.value), placeholder:'e.g. Forklift, scissor lift', style:inp })
+      ),
+      React.createElement('div', {},
+        React.createElement('label', { style:{ fontSize:12,fontWeight:600,color:'#374151',marginBottom:4,display:'block' }}, 'Notes'),
+        React.createElement('textarea', { value:notes, onChange:e=>setNotes(e.target.value), placeholder:'Any additional notes for this project...', rows:3, style:{ ...inp, resize:'vertical', fontFamily:'inherit' } })
       ),
       React.createElement('div', { style:{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:12 }},
         React.createElement('div', {},
@@ -1163,7 +1168,7 @@ function App() {
     const cc1 = {}, cc2 = {};
     for (const [d,v] of Object.entries(cc)) { if (d <= dayBefore) cc1[d]=v; else cc2[d]=v; }
     /* Carry over estimate/meta fields so they follow both segments of the split */
-    const carry = { crewSizeEst: project.crewSizeEst, hubspotDealId: project.hubspotDealId, equipmentNeeded: project.equipmentNeeded, tempsNeeded: project.tempsNeeded };
+    const carry = { crewSizeEst: project.crewSizeEst, hubspotDealId: project.hubspotDealId, equipmentNeeded: project.equipmentNeeded, tempsNeeded: project.tempsNeeded, notes: project.notes };
     const part1 = { name: project.name, startDate: project.startDate, endDate: dayBefore, color: project.color, employees: [...project.employees], equipment: [...(project.equipment||[])], ccChecks: cc1, ...carry };
     const part2 = { name: project.name, startDate: splitDateStr, endDate: project.endDate, color: project.color, employees: [...project.employees], equipment: [...(project.equipment||[])], ccChecks: cc2, ...carry };
 
@@ -1623,7 +1628,7 @@ function App() {
                             style:{ fontSize:10,fontWeight:600,color:p.color,background:p.color+'18',padding:'2px 5px',borderRadius:3,borderLeft:`2px solid ${p.color}`,cursor:'pointer',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',lineHeight:1.4 },
                             title:p.name,
                             onMouseOver:e=>e.currentTarget.style.opacity='0.8', onMouseOut:e=>e.currentTarget.style.opacity='1'
-                          }, p.name)
+                          }, p.name+(p.notes?' \u{1F4AC}':''))
                         )
                   );
                 })
@@ -1676,7 +1681,7 @@ function App() {
                 onMouseEnter:()=>setHoveredProject(p.id), onMouseLeave:()=>setHoveredProject(null),
                 style:{ gridColumn:`${seg.startCol+1} / ${seg.endCol+2}`,gridRow:seg.lane+2,background:p.color+'15',borderLeft:`3px solid ${p.color}`,borderRadius:`${seg.isStart?4:0}px ${seg.isEnd?4:0}px ${seg.isEnd?4:0}px ${seg.isStart?4:0}px`,padding:'3px 6px',margin:'1px 2px',cursor:'pointer',transition:'opacity 0.1s',opacity:hoveredProject&&hoveredProject!==p.id?0.4:1,zIndex:1,overflow:'hidden',minWidth:0 }
               },
-                React.createElement('div', { style:{ fontSize:nfs,fontWeight:700,color:p.color,lineHeight:1.3,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}, p.name),
+                React.createElement('div', { style:{ fontSize:nfs,fontWeight:700,color:p.color,lineHeight:1.3,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}, p.name+(p.notes?' \u{1F4AC}':'')),
                 React.createElement('div', { style:{ display:'flex',flexWrap:'wrap',gap:1,marginTop:1 }},
                   viewMode === 'employees' ?
                   p.employees.map((e,idx) => {
@@ -1705,14 +1710,11 @@ function App() {
       })
     ),
 
-    /* \u{2500}\u{2500} Requested Time Off by Day \u{2500}\u{2500} */
-    React.createElement('div', {
-      style:{ flexShrink:0,borderTop:'2px solid #d1d5db',background:'#f9fafb' }
-    },
-      /* Toggle header */
+    /* \u{2500}\u{2500} Bottom panels toggle row (collapsed panels stagger into one row) \u{2500}\u{2500} */
+    React.createElement('div', { style:{ flexShrink:0,display:'flex',flexDirection:'row',flexWrap:'wrap',borderTop:'2px solid #d1d5db',background:'#f9fafb' } },
       React.createElement('div', {
         onClick:()=>setShowTimeOff(!showTimeOff),
-        style:{ display:'flex',alignItems:'center',justifyContent:'space-between',padding:'8px 16px',cursor:'pointer',userSelect:'none' },
+        style:{ display:'flex',alignItems:'center',gap:10,padding:'8px 14px',cursor:'pointer',userSelect:'none',borderRight:'1px solid #e2e8f0' },
         onMouseOver:e=>e.currentTarget.style.background='#f1f5f9',
         onMouseOut:e=>e.currentTarget.style.background='transparent'
       },
@@ -1726,6 +1728,36 @@ function App() {
         ),
         React.createElement('span', { style:{ fontSize:12,color:'#94a3b8',fontWeight:600 }}, showTimeOff ? '\u{25BC} Hide' : '\u{25B6} Show')
       ),
+      React.createElement('div', {
+        onClick:()=>setShowAvailability(!showAvailability),
+        style:{ display:'flex',alignItems:'center',gap:10,padding:'8px 14px',cursor:'pointer',userSelect:'none',borderRight:'1px solid #e2e8f0' },
+        onMouseOver:e=>e.currentTarget.style.background='#f1f5f9',
+        onMouseOut:e=>e.currentTarget.style.background='transparent'
+      },
+        React.createElement('div', { style:{ display:'flex',alignItems:'center',gap:8 }},
+          React.createElement('span', { style:{ fontSize:14 }}, '\u{1F4CB}'),
+          React.createElement('span', { style:{ fontSize:13,fontWeight:700,color:'#334155' }}, 'Available Employees'),
+          React.createElement('span', { style:{ fontSize:11,fontWeight:500,color:'#94a3b8' }}, `(unassigned by day)`)
+        ),
+        React.createElement('span', { style:{ fontSize:12,color:'#94a3b8',fontWeight:600 }}, showAvailability ? '\u{25BC} Hide' : '\u{25B6} Show')
+      ),
+      React.createElement('div', {
+        onClick:()=>setShowTBDQueue(!showTBDQueue),
+        style:{ display:'flex',alignItems:'center',gap:10,padding:'8px 14px',cursor:'pointer',userSelect:'none',borderRight:'1px solid #e2e8f0' },
+        onMouseOver:e=>e.currentTarget.style.background='#f1f5f9',
+        onMouseOut:e=>e.currentTarget.style.background='transparent'
+      },
+        React.createElement('div', { style:{ display:'flex',alignItems:'center',gap:8,flexWrap:'wrap' }},
+          React.createElement('span', { style:{ fontSize:14 }}, '\u{1F4C2}'),
+          React.createElement('span', { style:{ fontSize:13,fontWeight:700,color:'#334155' }}, 'TBD Project Queue'),
+          React.createElement('span', { style:{ fontSize:11,fontWeight:500,color:'#94a3b8' }}, 'Awarded Jobs that are flexible or unknown start date')
+        ),
+        React.createElement('span', { style:{ fontSize:12,color:'#94a3b8',fontWeight:600 }}, showTBDQueue ? '\u{25BC} Hide' : '\u{25B6} Show')
+      )
+    ),
+    React.createElement('div', {
+      style:{ flexShrink:0,borderTop:'2px solid #d1d5db',background:'#f9fafb' }
+    },
       /* Grid of time-off requests per day (aligned with calendar columns) */
       showTimeOff && React.createElement('div', {
         style:{ maxHeight:200,overflow:'auto',padding:'0 12px 10px' }
@@ -1776,25 +1808,9 @@ function App() {
         )
       )
     ),
-
-    /* \u{2500}\u{2500} Available Employees by Day \u{2500}\u{2500} */
     React.createElement('div', {
       style:{ flexShrink:0,borderTop:'2px solid #d1d5db',background:'#f9fafb' }
     },
-      /* Toggle header */
-      React.createElement('div', {
-        onClick:()=>setShowAvailability(!showAvailability),
-        style:{ display:'flex',alignItems:'center',justifyContent:'space-between',padding:'8px 16px',cursor:'pointer',userSelect:'none' },
-        onMouseOver:e=>e.currentTarget.style.background='#f1f5f9',
-        onMouseOut:e=>e.currentTarget.style.background='transparent'
-      },
-        React.createElement('div', { style:{ display:'flex',alignItems:'center',gap:8 }},
-          React.createElement('span', { style:{ fontSize:14 }}, '\u{1F4CB}'),
-          React.createElement('span', { style:{ fontSize:13,fontWeight:700,color:'#334155' }}, 'Available Employees'),
-          React.createElement('span', { style:{ fontSize:11,fontWeight:500,color:'#94a3b8' }}, `(unassigned by day)`)
-        ),
-        React.createElement('span', { style:{ fontSize:12,color:'#94a3b8',fontWeight:600 }}, showAvailability ? '\u{25BC} Hide' : '\u{25B6} Show')
-      ),
       /* Grid of available employees per day */
       showAvailability && React.createElement('div', {
         style:{ maxHeight:200,overflow:'auto',padding:'0 12px 10px' }
@@ -1833,25 +1849,9 @@ function App() {
         )
       )
     ),
-
-    /* \u{2500}\u{2500} TBD Project Queue \u{2500}\u{2500} */
     React.createElement('div', {
       style:{ flexShrink:0,borderTop:'2px solid #d1d5db',background:'#f9fafb' }
     },
-      /* Toggle header */
-      React.createElement('div', {
-        onClick:()=>setShowTBDQueue(!showTBDQueue),
-        style:{ display:'flex',alignItems:'center',justifyContent:'space-between',padding:'8px 16px',cursor:'pointer',userSelect:'none' },
-        onMouseOver:e=>e.currentTarget.style.background='#f1f5f9',
-        onMouseOut:e=>e.currentTarget.style.background='transparent'
-      },
-        React.createElement('div', { style:{ display:'flex',alignItems:'center',gap:8,flexWrap:'wrap' }},
-          React.createElement('span', { style:{ fontSize:14 }}, '\u{1F4C2}'),
-          React.createElement('span', { style:{ fontSize:13,fontWeight:700,color:'#334155' }}, 'TBD Project Queue'),
-          React.createElement('span', { style:{ fontSize:11,fontWeight:500,color:'#94a3b8' }}, 'Awarded Jobs that are flexible or unknown start date')
-        ),
-        React.createElement('span', { style:{ fontSize:12,color:'#94a3b8',fontWeight:600 }}, showTBDQueue ? '\u{25BC} Hide' : '\u{25B6} Show')
-      ),
       /* Queue content */
       showTBDQueue && React.createElement('div', {
         style:{ padding:'0 16px 12px' }
