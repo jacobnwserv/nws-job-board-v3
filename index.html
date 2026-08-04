@@ -1646,7 +1646,7 @@ function App() {
             /* Date numbers \u{2014} row 1 */
             week.map((date, di) => {
               const ds=fmtDate(date), isToday=ds===today;
-              return React.createElement('div', { key:'d-'+ds, style:{ gridColumn:di+1,gridRow:1,padding:'4px 5px',zIndex:1 }},
+              return React.createElement('div', { key:'d-'+ds, style:{ gridColumn:di+1,gridRow:1,padding:'4px 5px',zIndex:1,background: numWeeks > 1 ? '#4b5563' : 'transparent' }},
                 React.createElement('span', { style:{ fontSize:13,fontWeight:isToday?800:date.getDate()===1?700:600,background:isToday?'#2563eb':'#000',color:'#fff',borderRadius:isToday?12:4,padding:isToday?'1px 7px':'1px 6px',lineHeight:1.5 }},
                   date.getDate()===1 ? `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][date.getMonth()]} ${date.getDate()}` : date.getDate()
                 )
