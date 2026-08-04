@@ -1627,7 +1627,7 @@ function App() {
       React.createElement('div', {
         style:{ display:'grid',gridTemplateColumns:'repeat(7, 1fr)',gap:1,background:'#e5e7eb',borderRadius:'10px 10px 0 0',overflow:'hidden',flexShrink:0 }
       },
-        DAY_NAMES.map((d,i) => React.createElement('div', { key:d, style:{ padding:'8px 10px',background: i>=5 ? '#f1f5f9':'#fff',textAlign:'center',fontSize:13,fontWeight:700,color: i>=5 ? '#94a3b8':'#374151',textTransform:'uppercase',letterSpacing:'0.05em' }}, d))
+        DAY_NAMES.map((d,i) => React.createElement('div', { key:d, style:{ padding:'8px 10px',background:'#000',textAlign:'center',fontSize:13,fontWeight:700,color:'#fff',textTransform:'uppercase',letterSpacing:'0.05em' }}, d))
       ),
       /* Week rows \u{2014} projects span across days */
       weeks.map((week, wi) => {
@@ -1647,7 +1647,7 @@ function App() {
             week.map((date, di) => {
               const ds=fmtDate(date), isToday=ds===today;
               return React.createElement('div', { key:'d-'+ds, style:{ gridColumn:di+1,gridRow:1,padding:'4px 5px',zIndex:1 }},
-                React.createElement('span', { style:{ fontSize:13,fontWeight:isToday?800:date.getDate()===1?700:600,background:isToday?'#2563eb':'transparent',color:isToday?'#fff':'#374151',borderRadius:isToday?12:0,padding:isToday?'1px 7px':0,lineHeight:1.5 }},
+                React.createElement('span', { style:{ fontSize:13,fontWeight:isToday?800:date.getDate()===1?700:600,background:isToday?'#2563eb':'#000',color:'#fff',borderRadius:isToday?12:4,padding:isToday?'1px 7px':'1px 6px',lineHeight:1.5 }},
                   date.getDate()===1 ? `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][date.getMonth()]} ${date.getDate()}` : date.getDate()
                 )
               );
