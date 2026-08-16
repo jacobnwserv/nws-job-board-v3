@@ -1393,6 +1393,28 @@ function App() {
   /* \u{2500}\u{2500} Available employees per day (unassigned to any project) \u{2500}\u{2500} */
   const [showAvailability, setShowAvailability] = useState(false);
 
+  /* \u{2500}\u{2500} Daily crew fill: assigned (employees + temps) vs Crew Size Est. \u{2500}\u{2500} */
+  const crewSummaryByDay = useMemo(() => {
+    const result = {};
+    for (const day of days) {
+      const ds = fmtDate(day);
+      let assigned = 0, est = 0, projCount = 0;
+      for (const p of projects) {
+        if (p.startDate <= ds && p.endDate >= ds) {
+          const filled = (p.employees ? p.employees.length : 0) + (Number(p.tempsNeeded) || 0);
+          const rawEst = Number(p.crewSizeEst);
+          /* No estimate entered \u{2192} assume the project is fully staffed as-is */
+          const useEst = (p.crewSizeEst !== '' && p.crewSizeEst != null && !isNaN(rawEst)) ? rawEst : filled;
+          assigned += filled;
+          est += useEst;
+          projCount++;
+        }
+      }
+      result[ds] = { assigned, est, projCount, open: Math.max(0, est - assigned), over: Math.max(0, assigned - est) };
+    }
+    return result;
+  }, [days, projects]);
+
   const availableByDay = useMemo(() => {
     const result = {};
     for (const day of days) {
@@ -1635,7 +1657,7 @@ function App() {
         const totalRows = 1 + Math.max(numLanes, 1);
         return React.createElement('div', {
           key:wi,
-          style:{ display:'grid',gridTemplateColumns:'repeat(7, 1fr)',gridTemplateRows:`auto repeat(${Math.max(numLanes,1)}, auto)`,borderRadius: wi===numWeeks-1 ? '0 0 10px 10px':0,overflow:'hidden',flex:1,minHeight:0,borderTop:'1px solid #e5e7eb' }
+          style:{ display:'grid',gridTemplateColumns:'repeat(7, 1fr)',gridTemplateRows:`auto repeat(${Math.max(numLanes,1)}, auto)`,borderRadius: (wi===numWeeks-1 && numWeeks>1) ? '0 0 10px 10px':0,overflow:'hidden',flex:1,minHeight:0,borderTop:'1px solid #e5e7eb' }
         },
           [].concat(
             /* Day background cells \u{2014} span all rows */
@@ -1689,7 +1711,38 @@ function App() {
             })
           )
         );
-      })
+      }),
+      /* \u{2500}\u{2500} Daily crew fill summary bar \u{2014} 1-week view only \u{2500}\u{2500} */
+      (numWeeks === 1 ? React.createElement('div', {
+        key:'crew-summary',
+        style:{ flexShrink:0,borderTop:'2px solid #94a3b8',borderRadius:'0 0 10px 10px',overflow:'hidden',background:'#f8fafc' }
+      },
+        React.createElement('div', {
+          style:{ padding:'3px 10px',background:'#1e293b',fontSize:10,fontWeight:700,color:'#e2e8f0',textTransform:'uppercase',letterSpacing:'0.06em' }
+        }, 'Daily Crew Fill \u{2014} Assigned (incl. temps) vs Crew Size Est.'),
+        React.createElement('div', { style:{ display:'grid',gridTemplateColumns:'repeat(7, 1fr)' }},
+          (weeks[0] || []).map((date, di) => {
+            const ds = fmtDate(date);
+            const s = crewSummaryByDay[ds] || { assigned:0, est:0, projCount:0, open:0, over:0 };
+            const isToday = ds === today;
+            const none = s.projCount === 0;
+            const bg = none ? '#f1f5f9' : s.open > 0 ? '#fef3c7' : s.over > 0 ? '#fee2e2' : '#dcfce7';
+            const fg = none ? '#94a3b8' : s.open > 0 ? '#b45309' : s.over > 0 ? '#b91c1c' : '#15803d';
+            const txt = none ? 'NO JOBS' : s.open > 0 ? s.open + (s.open === 1 ? ' OPEN' : ' OPEN') : s.over > 0 ? '+' + s.over + ' OVER' : 'FULL';
+            return React.createElement('div', {
+              key:'cs-'+ds,
+              title: none ? 'No projects scheduled' : `${s.assigned} assigned of ${s.est} estimated across ${s.projCount} project${s.projCount===1?'':'s'}`,
+              style:{ padding:'6px 5px',borderRight:di<6?'1px solid #e2e8f0':'none',background:isToday?'#eff6ff':'transparent',display:'flex',flexDirection:'column',alignItems:'center',gap:3,minWidth:0 }
+            },
+              React.createElement('div', { style:{ fontSize:13,fontWeight:700,color: none ? '#cbd5e1' : '#334155',lineHeight:1,whiteSpace:'nowrap' }},
+                none ? '\u{2013}' : s.assigned + ' / ' + s.est),
+              React.createElement('div', {
+                style:{ fontSize:10,fontWeight:800,color:fg,background:bg,padding:'1px 6px',borderRadius:10,letterSpacing:'0.03em',whiteSpace:'nowrap' }
+              }, txt)
+            );
+          })
+        )
+      ) : null)
     ),
 
     /* \u{2500}\u{2500} Bottom panels toggle row (collapsed panels stagger into one row) \u{2500}\u{2500} */
